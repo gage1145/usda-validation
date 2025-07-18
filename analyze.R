@@ -34,12 +34,26 @@ df_ <- lapply(files, get_raw) %>%
 norm <- normalize_RFU(df_, transposed = TRUE)
 
 calcs <- calculate_metrics(norm, meta) %>%
-  mutate(Assay = meta$Assay) %>%
+  mutate(
+    Assay = meta$Assay,
+    crossed = TtT != 72
+  ) %>%
   separate_wider_delim(
     "Sample IDs", 
     "_", 
     names = c("Sample IDs", "Tissue"), 
     too_few = "align_start"
+  )
+
+df_sum <- calcs %>%
+  group_by(`Sample IDs`, Dilutions, Assay, Tissue) %>%
+  summarize(
+    reps = n(),
+    mean_MPR = mean(MPR),
+    mean_MS  = mean(MS),
+    mean_TtT = mean(TtT),
+    mean_RAF = mean(RAF),
+    thres_pos = sum(crossed) > reps / 2
   )
 
 df_ <- df_ %>%
@@ -59,4 +73,5 @@ norm <- norm %>%
 write.csv(df_, "data/raw.csv", row.names = FALSE)
 write.csv(norm, "data/norm.csv", row.names = FALSE)
 write.csv(calcs, "data/calcs.csv", row.names = FALSE)
+write.csv(df_sum, "data/summary.csv", row.names = FALSE)
 

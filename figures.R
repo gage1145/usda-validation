@@ -25,6 +25,12 @@ df_sum <- df_ %>%
     median_RAF = median(RAF)
   )
 
+results <- read.csv("data/summary.csv", check.names = FALSE) %>%
+  na.omit() %>%
+  mutate_at("Dilutions", as.factor) %>%
+  mutate(Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")))
+
+# Tissue Histogram
 df_ %>%
   arrange(desc(RAF)) %>%
   ggplot(aes(fct_inorder(`Sample IDs`), RAF, fill = Assay)) +
@@ -45,6 +51,7 @@ df_ %>%
   )
 ggsave("RAFs.png", path="figures", width=12, height=8)
   
+# Tissue Boxplot
 df_ %>%
   filter(TtT != 72) %>%
   ggplot(aes(RAF, fct_rev(Dilutions), fill = Assay)) +
@@ -68,3 +75,15 @@ df_ %>%
     legend.background = element_blank()
   )
 ggsave("histograms.png", path="figures", width=12, height=8)
+
+
+
+# Logistic Curve
+results %>%
+  mutate_at("thres_pos", as.integer) %>%
+  ggplot(aes(mean_MPR, thres_pos, color=Dilutions, linetype = Assay)) +
+  geom_smooth(
+    method="glm",
+    method.args = list(family = "binomial"), 
+    se = FALSE
+  )
