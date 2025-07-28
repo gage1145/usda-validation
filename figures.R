@@ -30,7 +30,7 @@ results <- read.csv("data/summary.csv", check.names = FALSE) %>%
   mutate_at("Dilutions", as.factor) %>%
   mutate(Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")))
 
-# Tissue Histogram
+# Tissue Boxplot
 df_ %>%
   arrange(desc(RAF)) %>%
   ggplot(aes(fct_inorder(`Sample IDs`), RAF, fill = Assay)) +
@@ -45,21 +45,21 @@ df_ %>%
   main_theme +
   theme(
     axis.title.x = element_blank(),
-    axis.text.x = element_text(angle=45, hjust=1, vjust=1),
+    axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
     legend.position = "bottom",
     legend.title = element_blank()
   )
 ggsave("RAFs.png", path="figures", width=12, height=8)
   
-# Tissue Boxplot
+# Tissue Histograms
 df_ %>%
   filter(TtT != 72) %>%
   ggplot(aes(RAF, fct_rev(Dilutions), fill = Assay)) +
   geom_density_ridges(scale=4, rel_min_height=0.001, panel_scaling=FALSE, alpha=0.6) +
-  facet_grid(vars(Tissue)) +
+  facet_grid(vars(Tissue), scale = "free") +
   scale_color_manual(values=c("cyan3", "orangered1")) +
   scale_fill_manual(values=c("cyan3", "orangered1")) +
-  scale_x_continuous(breaks=seq(0,0.2,0.02), expand=c(0,0)) +
+  # scale_x_continuous(breaks=seq(0,0.2,0.02), expand=c(0,0)) +
   scale_y_discrete(expand=c(0.2, 0)) +
   labs(
     x="Rate of Amyloid Formation (1/h)",
