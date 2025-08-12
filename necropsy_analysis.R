@@ -2,13 +2,7 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
-
-
-
-get_raw <- function(file) {
-  get_real(file)[[1]] %>%
-    transpose_real()
-}
+source("functions.R")
 
 get_info <- function(file) {
   assay <- str_split_i(file, "_", 5) %>%
@@ -22,7 +16,7 @@ get_info <- function(file) {
     )
 }
 
-files <- list.files("raw", ".xlsx", full.names = TRUE)
+files <- list.files("raw/necropsy", ".xlsx", full.names = TRUE)
 
 meta <- lapply(files, get_info) %>%
   bind_rows()
