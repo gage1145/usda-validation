@@ -64,8 +64,8 @@ norm <- norm %>%
   ) %>%
   relocate(c(Dilutions, Assay), .after = `Sample IDs`)
 
-write.csv(df_, "data/raw.csv", row.names = FALSE)
-write.csv(norm, "data/norm.csv", row.names = FALSE)
-write.csv(calcs, "data/calcs.csv", row.names = FALSE)
-write.csv(df_sum, "data/summary.csv", row.names = FALSE)
+write.csv(df_, "data/necropsy/raw.csv", row.names = FALSE)
+write.csv(norm, "data/necropsy/norm.csv", row.names = FALSE)
+write.csv(calcs, "data/necropsy/calcs.csv", row.names = FALSE)
+write.csv(df_sum, "data/necropsy/summary.csv", row.names = FALSE)
 
