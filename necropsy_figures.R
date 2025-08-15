@@ -43,19 +43,29 @@ dark_theme <- theme(
 
 df_ <- read.csv("data/necropsy/calcs.csv", check.names = FALSE) %>%
   na.omit() %>%
-  mutate_at("Dilutions", as.factor) %>%
-  mutate(Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")))
+  mutate(
+    Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")),
+  ) %>%
+  mutate_at("Dilutions", as.factor)
 
 df_sum <- df_ %>%
   group_by(`Sample IDs`, Dilutions, Assay, Tissue) %>%
   summarize(
     median_RAF = median(RAF)
+  ) %>%
+  mutate(
+    Dilutions = factor(
+      Dilutions, 
+      levels=c(-2, -3, -4), 
+      labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
   )
 
 results <- read.csv("data/necropsy/summary.csv", check.names = FALSE) %>%
   na.omit() %>%
   mutate_at("Dilutions", as.factor) %>%
-  mutate(Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")))
+  mutate(
+    Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC"))
+  )
 
 
 
@@ -64,26 +74,35 @@ results <- read.csv("data/necropsy/summary.csv", check.names = FALSE) %>%
 
 
 df_ %>%
-  arrange(desc(RAF)) %>%
+  mutate(
+    Dilutions = factor(
+      Dilutions, 
+      levels=c(-2, -3, -4), 
+      labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
+  ) %>%
   ggplot(aes(fct_inorder(`Sample IDs`), RAF, fill = Assay)) +
   geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
-  geom_boxplot(outliers = FALSE, color="darkgrey", linewidth=0.25) +
-  facet_grid(vars(Dilutions), vars(Tissue), space = "free") +
+  geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
+  facet_grid(vars(fct_rev(Dilutions)), vars(Tissue), space = "free", labeller=label_parsed) +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
+  scale_y_continuous(sec.axis = sec_axis(~ ., name = "Dilution Factor", breaks = NULL)) +
   labs(
     y="Rate of Amyloid Formation (1/s)"
   ) +
-  {if (dark_bool) theme_transparent()} +
-  {if (dark_bool) dark_theme else main_theme} +
+  {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-    legend.position = c(0.8, 0.8),
-    legend.title = element_blank()
+    legend.position = c(0.85, 0.85),
+    legend.title = element_blank(),
+    legend.background = element_blank()
   )
-ggsave("RAFs.png", path="figures/necropsy", width=12, height=6)
-  
+ggsave(
+  ifelse(dark_bool, "dark_RAFs.png", "light_RAFs.png"), 
+  path="figures/necropsy", width=12, height=6
+)
+
 
 
 # Tissue Histograms -------------------------------------------------------
@@ -98,7 +117,7 @@ df_ %>%
     rel_min_height=0.001, 
     panel_scaling=FALSE, 
     alpha=0.6, 
-    color="darkgrey"
+    color=ifelse(dark_bool, "darkgrey", "black")
   ) +
   facet_grid(vars(Tissue), scale = "free") +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
@@ -122,7 +141,10 @@ df_ %>%
     panel.grid.major.y = element_line(color="darkgrey"),
     panel.border = element_blank()
   )
-ggsave("histograms.png", path="figures/necropsy", width=16, height=8)
+ggsave(
+  ifelse(dark_bool, "dark_histograms.png", "light_histograms.png"), 
+  path="figures/necropsy", width=16, height=8
+)
 
 
 
@@ -130,11 +152,11 @@ ggsave("histograms.png", path="figures/necropsy", width=16, height=8)
 
 
 
-results %>%
-  mutate_at("thres_pos", as.integer) %>%
-  ggplot(aes(mean_MPR, thres_pos, color=Dilutions, linetype = Assay)) +
-  geom_smooth(
-    method="glm",
-    method.args = list(family = "binomial"), 
-    se = FALSE
-  )
+# results %>%
+#   mutate_at("thres_pos", as.integer) %>%
+#   ggplot(aes(mean_MPR, thres_pos, color=Dilutions, linetype = Assay)) +
+#   geom_smooth(
+#     method="glm",
+#     method.args = list(family = "binomial"), 
+#     se = FALSE
+#   )
