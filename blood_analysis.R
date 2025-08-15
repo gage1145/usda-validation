@@ -28,6 +28,15 @@ files <- list.files("raw/blood", ".xlsx", full.names = TRUE)
 meta <- lapply(files, get_info) %>%
   bind_rows()
 
+locs <- lapply(files, get_sample_locations) %>%
+  bind_rows() %>%
+  separate_wider_delim(
+    IDs, 
+    "_", 
+    names=c("Sample IDs", "Assay"),
+    too_few="align_start"
+  )
+
 df_ <- lapply(files, get_raw) %>%
   bind_rows() %>%
   # rename("Preparation" = "Sample IDs") %>%
@@ -84,6 +93,7 @@ norm <- norm %>%
 
 write.csv(df_, "data/blood/raw.csv", row.names = FALSE)
 write.csv(norm, "data/blood/norm.csv", row.names = FALSE)
+write.csv(locs, "data/blood/locs.csv", row.names = FALSE)
 write.csv(calcs, "data/blood/calcs.csv", row.names = FALSE)
 write.csv(df_sum, "data/blood/summary.csv", row.names = FALSE)
 
