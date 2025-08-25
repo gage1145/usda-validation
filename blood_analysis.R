@@ -7,18 +7,22 @@ source("functions.R")
 
 
 get_info <- function(file) {
-  # assay <- str_split_i(file, "_", 5) %>%
-  #   str_remove(".xlsx")
+  assay <- str_split_i(file, "_", 5) %>%
+    str_remove(".xlsx")
+  reaction <- str_split_i(file, "/", 3) %>%
+    str_remove(".xlsx")
   
   organize_tables(file) %>%
     convert_tables() %>%
     mutate(
-      Dilutions = -log10(as.numeric(Dilutions))
+      Dilutions = -log10(as.numeric(Dilutions)),
+      Assay = assay,
+      Reaction = reaction
     ) %>%
     separate_wider_delim(
       `Sample IDs`, 
       "_", 
-      names=c("Sample IDs", "Assay"),
+      names=c("Treatment", "Sample IDs"),
       too_few="align_start"
     )
 }
@@ -33,8 +37,13 @@ locs <- lapply(files, get_sample_locations) %>%
   separate_wider_delim(
     IDs, 
     "_", 
-    names=c("Sample IDs", "Assay"),
+    names=c("Treatment", "Sample IDs"),
     too_few="align_start"
+  ) %>%
+  mutate(
+    Dilutions = meta$Dilutions,
+    Assay = meta$Assay,
+    Reaction = meta$Reaction
   )
 
 df_ <- lapply(files, get_raw) %>%
@@ -54,8 +63,10 @@ norm <- normalize_RFU(df_, transposed = TRUE)
 
 calcs <- data.frame(
   `Sample IDs` = meta$`Sample IDs`,
+  Treatment = meta$Treatment,
   Dilutions = meta$Dilutions,
   Assay = meta$Assay,
+  Reaction = meta$Reaction,
   check.names = FALSE
 ) %>%
   mutate(
@@ -67,7 +78,7 @@ calcs <- data.frame(
   )
 
 df_sum <- calcs %>%
-  group_by(`Sample IDs`, Dilutions, Assay) %>%
+  group_by(`Sample IDs`, Treatment, Dilutions, Assay, Reaction) %>%
   summarize(
     reps = n(),
     mean_MPR = mean(MPR),
@@ -79,17 +90,21 @@ df_sum <- calcs %>%
 
 df_ <- df_ %>%
   mutate(
+    Treatment = meta$Treatment,
     Dilutions = meta$Dilutions,
-    Assay = meta$Assay
+    Assay = meta$Assay,
+    Reaction = meta$Reaction
   ) %>%
-  relocate(c(Dilutions, Assay), .after = `Sample IDs`)
+  relocate(c(Treatment, Dilutions, Assay), .after = `Sample IDs`)
 
 norm <- norm %>%
   mutate(
+    Treatment = meta$Treatment,
     Dilutions = meta$Dilutions,
-    Assay = meta$Assay
+    Assay = meta$Assay,
+    Reaction = meta$Reaction
   ) %>%
-  relocate(c(Dilutions, Assay), .after = `Sample IDs`)
+  relocate(c(Treatment, Dilutions, Assay), .after = `Sample IDs`)
 
 write.csv(df_, "data/blood/raw.csv", row.names = FALSE)
 write.csv(norm, "data/blood/norm.csv", row.names = FALSE)
