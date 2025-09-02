@@ -55,7 +55,7 @@ df_sum <- df_ %>%
     median_RAF = median(RAF)
   )
 
-results <- read.csv("data/necropsy/summary.csv", check.names = FALSE) %>%
+results <- read.csv("data/oral-swabs/summary.csv", check.names = FALSE) %>%
   na.omit() %>%
   # mutate_at("Dilutions", as.factor) %>%
   mutate(
@@ -89,52 +89,8 @@ df_ %>%
   )
 ggsave(
   ifelse(dark_bool, "dark_RAFs.png", "light_RAFs.png"), 
-  path="figures/necropsy", width=12, height=6
+  path="figures/oral-swabs", width=8, height=12
 )
-
-
-
-# Tissue Histograms -------------------------------------------------------
-
-
-
-df_ %>%
-  filter(TtT != 72) %>%
-  ggplot(aes(RAF, fct_rev(Dilutions), fill = Assay)) +
-  geom_density_ridges(
-    scale=4, 
-    rel_min_height=0.001, 
-    panel_scaling=FALSE, 
-    alpha=0.6, 
-    color=ifelse(dark_bool, "darkgrey", "black")
-  ) +
-  facet_grid(vars(Tissue), scale = "free") +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-  scale_y_discrete(expand=c(0.2, 0)) +
-  labs(
-    x="Rate of Amyloid Formation (1/h)",
-    y="Log Dilution Factors"
-  ) +
-  {if (dark_bool) dark_theme else main_theme} +
-  theme(
-    axis.text.y = element_text(size=16),
-    legend.position.inside = TRUE,
-    legend.position = c(0.8, 0.93),
-    legend.direction = "horizontal",
-    legend.title = element_blank(),
-    legend.background = element_blank(),
-    panel.background = element_blank(),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(color="darkgrey"),
-    panel.border = element_blank()
-  )
-ggsave(
-  ifelse(dark_bool, "dark_histograms.png", "light_histograms.png"), 
-  path="figures/necropsy", width=16, height=8
-)
-
 
 
 df_ %>%
@@ -142,11 +98,12 @@ df_ %>%
   ggridges::geom_density_ridges_gradient() +
   scale_fill_gradient(low="skyblue", high="darkred") +
   facet_grid(rows=vars(Assay))
+ggsave("figures/oral-swabs/ridges.png", width=12, height=8)
 
 
 df_ %>%
   ggplot(aes(Months, MPR)) +
-  geom_point() +
+  geom_boxplot() +
   facet_grid(rows=vars(Assay)) 
 
 

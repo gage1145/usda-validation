@@ -1,0 +1,12 @@
+---
+title: "report"
+author: "Gage Rowden"
+format: pdf
+---
+
+# Necropsy
+![](figures/necropsy/light_histograms.png)
+
+# Whole Blood
+
+# Oral Swabs
