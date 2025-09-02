@@ -1,12 +1,17 @@
 ---
-title: "report"
-author: "Gage Rowden"
+# title: "report"
+# author: "Gage Rowden"
 format: pdf
 ---
 
 # Necropsy
+![](figures/necropsy/light_RAFs.png)
 ![](figures/necropsy/light_histograms.png)
 
 # Whole Blood
+![](figures/blood/combined_light.png)
 
 # Oral Swabs
+![](figures/oral-swabs/light_RAFs.png)
+
+![](figures/oral-swabs/ridges.png)
