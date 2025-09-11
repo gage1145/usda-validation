@@ -57,7 +57,6 @@ df_sum <- df_ %>%
 
 results <- read.csv("data/oral-swabs/summary.csv", check.names = FALSE) %>%
   na.omit() %>%
-  # mutate_at("Dilutions", as.factor) %>%
   mutate(
     Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC"))
   )
@@ -73,9 +72,9 @@ df_ %>%
   geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
   geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
   facet_grid(rows=vars(Months), space = "free") +
+  scale_y_log10() +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-  # scale_y_continuous(sec.axis = sec_axis(~ ., name = "Dilution Factor", breaks = NULL)) +
   labs(
     y="Rate of Amyloid Formation (1/s)"
   ) +
@@ -94,24 +93,10 @@ ggsave(
 
 
 df_ %>%
-  ggplot(aes(MPR, Months, fill=stat(x))) +
+  arrange(desc(Months)) %>%
+  ggplot(aes(MPR, fct_inorder(Months), fill=stat(x))) +
   ggridges::geom_density_ridges_gradient() +
-  scale_fill_gradient(low="skyblue", high="darkred") +
+  scale_fill_gradient(low="darkslateblue", high="darkorange") +
+  scale_x_log10() +
   facet_grid(rows=vars(Assay))
 ggsave("figures/oral-swabs/ridges.png", width=12, height=8)
-
-
-df_ %>%
-  ggplot(aes(Months, MPR)) +
-  geom_boxplot() +
-  facet_grid(rows=vars(Assay)) 
-
-
-
-
-
-
-
-
-
-
