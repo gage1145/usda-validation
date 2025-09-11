@@ -39,11 +39,30 @@ files <- list.files("raw/oral-swabs", ".xlsx", full.names = TRUE)
 df_ <- lapply(files, get_raw) %>%
   bind_rows()
 
-norm <- normalize_RFU(df_, transposed = TRUE)
+calcs <- lapply(# I have to do it this way to apply a different threshold to each assay.
+  c("Nano-QuIC", "RT-QuIC"),
+  function(assay) {
+    df_ %>%
+      filter(Assay == assay) %>%
+      mutate(Threshold = ifelse(assay == "Nano-QuIC", 2.7, 2)) %>%
+      calculate_metrics(
+        "Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
+        "Reaction", "Threshold",
+        threshold=ifelse(assay == "Nano-QuIC", 2.7, 2)
+      ) %>%
+      mutate(
+        crossed = TtT != max(df_$Time)
+      ) %>%
+      assign(assay, .)
+  }
+) %>%
+  bind_rows()
 
 
 df_sum <- calcs %>%
-  group_by(`Sample IDs`, `Animal IDs`, Months, Dilutions, Assay) %>%
+  group_by(
+    `Sample IDs`, `Animal IDs`, Months, Dilutions, Assay, Reaction, Threshold
+  ) %>%
   summarize(
     reps = n(),
     mean_MPR = mean(MPR),
