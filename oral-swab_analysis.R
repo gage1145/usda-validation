@@ -2,10 +2,10 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
-source("functions.R")
 
 
 
+# Metadata key for linking swabs to animals and timepoints.
 key <- read.csv("data/oral-swabs/meta.csv", check.names = FALSE) %>%
   select("Sample IDs", "Animal IDs", "Months") %>%
   mutate(
@@ -31,7 +31,6 @@ get_raw <- function(file) {
     left_join(key) %>%
     select("Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
            "Reaction", "Time", "RFU", "Norm", "Deriv")
-
 }
 
 files <- list.files("raw/oral-swabs", ".xlsx", full.names = TRUE)
@@ -39,25 +38,24 @@ files <- list.files("raw/oral-swabs", ".xlsx", full.names = TRUE)
 df_ <- lapply(files, get_raw) %>%
   bind_rows()
 
-calcs <- lapply(# I have to do it this way to apply a different threshold to each assay.
-  c("Nano-QuIC", "RT-QuIC"),
-  function(assay) {
-    df_ %>%
-      filter(Assay == assay) %>%
-      mutate(Threshold = ifelse(assay == "Nano-QuIC", 2.7, 2)) %>%
-      calculate_metrics(
-        "Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
-        "Reaction", "Threshold",
-        threshold=ifelse(assay == "Nano-QuIC", 2.7, 2)
-      ) %>%
-      mutate(
-        crossed = TtT != max(df_$Time)
-      ) %>%
-      assign(assay, .)
-  }
-) %>%
-  bind_rows()
+calculate <- function (assay) {
+  # I have to do it this way to apply a different threshold to each assay.
+  df_ %>%
+    filter(Assay == assay) %>%
+    mutate(Threshold = ifelse(assay == "Nano-QuIC", 2.7, 2)) %>%
+    calculate_metrics(
+      "Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
+      "Reaction", "Threshold",
+      threshold=ifelse(assay == "Nano-QuIC", 2.7, 2)
+    ) %>%
+    mutate(
+      crossed = TtT != max(df_$Time)
+    ) %>%
+    assign(assay, .)
+}
 
+calcs <- lapply(c("Nano-QuIC", "RT-QuIC"), calculate) %>%
+  bind_rows()
 
 df_sum <- calcs %>%
   group_by(
