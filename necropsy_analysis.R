@@ -2,34 +2,33 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
-source("functions.R")
 
-get_info <- function(file) {
-  assay <- str_split_i(file, "_", 5) %>%
-    str_remove(".xlsx")
-  
-  organize_tables(file) %>%
-    convert_tables() %>%
-    mutate(
-      Dilutions = -log10(as.numeric(Dilutions)),
-      Assay = assay
-    )
-}
+
 
 files <- list.files("raw/necropsy", ".xlsx", full.names = TRUE)
 
-meta <- lapply(files, get_info) %>%
-  bind_rows()
+get_raw <- function(file) {
+  assay <- str_split_i(file, "_", 5) %>%
+    str_remove(".xlsx")
+  rxn <- str_split_i(file, "/", 3) %>%
+    str_remove(".xlsx")
+  
+  file %>%
+    get_quic(norm_point=4) %>%
+    mutate(
+      Dilutions = -log10(as.numeric(Dilutions)),
+      Assay = assay,
+      Reaction = rxn
+    )
+}
 
 df_ <- lapply(files, get_raw) %>%
-  bind_rows() %>%
-  mutate(`Sample IDs` = meta$`Sample IDs`)
+    bind_rows()
 
-norm <- normalize_RFU(df_, transposed = TRUE)
-
-calcs <- calculate_metrics(norm, meta) %>%
+calcs <- calculate_metrics(
+  df_, "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction", threshold=2.7
+) %>%
   mutate(
-    Assay = meta$Assay,
     crossed = TtT != 72
   ) %>%
   separate_wider_delim(
@@ -50,22 +49,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-df_ <- df_ %>%
-  mutate(
-    Dilutions = meta$Dilutions,
-    Assay = meta$Assay
-  ) %>%
-  relocate(c(Dilutions, Assay), .after = `Sample IDs`)
-
-norm <- norm %>%
-  mutate(
-    Dilutions = meta$Dilutions,
-    Assay = meta$Assay
-  ) %>%
-  relocate(c(Dilutions, Assay), .after = `Sample IDs`)
-
 write.csv(df_, "data/necropsy/raw.csv", row.names = FALSE)
-write.csv(norm, "data/necropsy/norm.csv", row.names = FALSE)
 write.csv(calcs, "data/necropsy/calcs.csv", row.names = FALSE)
 write.csv(df_sum, "data/necropsy/summary.csv", row.names = FALSE)
 
