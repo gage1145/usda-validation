@@ -2,7 +2,6 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
-source("functions.R")
 
 
 
