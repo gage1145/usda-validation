@@ -66,16 +66,7 @@ results <- read.csv("data/blood/summary.csv", check.names = FALSE) %>%
     Dilutions = factor(Dilutions, level=c(0, -1, -2, -3, -4))
   )
 
-wells <- read.csv("data/blood/locs.csv", check.names = FALSE)
-
 df_raw <- read.csv("data/blood/raw.csv", check.names = FALSE) %>%
-  mutate(
-    Wells = wells$V1,
-    Reaction = wells$Reaction
-  ) %>%
-  relocate(c("Wells", "Reaction"), .after="Assay") %>%
-  pivot_longer(7:ncol(.), names_to = "time", values_to = "rfu") %>%
-  mutate_at(c("time", "rfu"), as.numeric) %>%
   mutate_at(c("Sample IDs", "Treatment", "Dilutions", "Assay"), as.factor)
 
 
@@ -119,7 +110,9 @@ boxes_A <- df_ %>%
   {if (dark_bool) dark_theme else main_theme} +
   theme(
     legend.position = "right",
-    legend.title = element_text(color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"),
+    legend.title = element_text(
+      color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"
+    ),
     axis.title.x=element_blank(),
   )
 
@@ -135,7 +128,9 @@ boxes_B <- df_ %>%
   {if (dark_bool) dark_theme else main_theme} +
   theme(
     legend.position = "right",
-    legend.title = element_text(color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"),
+    legend.title = element_text(
+      color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"
+    ),
   )
 
 boxes_combined <- ggarrange(
@@ -151,13 +146,14 @@ boxes_combined
 # Real-time graphs --------------------------------------------------------
 
 
+
 rt_theme <- function(p) {
   p %>%
     mutate(
       Assay = factor(Assay, levels=c("RT-QuIC", "Nano-QuIC")),
       group = paste(Wells, Reaction, sep="_")
     ) %>%
-    ggplot(aes(time, rfu, color=`Sample IDs`, group=group)) +
+    ggplot(aes(Time, RFU, color=`Sample IDs`, group=group)) +
     geom_line(linewidth=1) +
     facet_grid(rows=vars(Assay)) +
     scale_color_manual(values=c("darkslateblue", "red")) +
@@ -181,7 +177,9 @@ rt_A <- df_raw %>%
   {if (dark_bool) dark_theme else main_theme} +
   theme(
     legend.position = "none",
-    legend.title = element_text(color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"),
+    legend.title = element_text(
+      color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"
+    ),
     axis.title.x=element_blank(),
   )
 
@@ -196,7 +194,9 @@ rt_B <- df_raw %>%
   {if (dark_bool) dark_theme else main_theme} +
   theme(
     legend.position = "none",
-    legend.title = element_text(color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"),
+    legend.title = element_text(
+      color=ifelse(dark_bool, "white", "black"), hjust=0.5, face="bold"
+    ),
     axis.text.x = element_text(angle=0, hjust=0.5, vjust=1)
   )
 
@@ -224,4 +224,9 @@ ggarrange(
   theme(
     plot.background = element_rect(fill=ifelse(dark_bool, "#1f1f1f", "white"))
   )
-ggsave(ifelse(dark_bool, "combined_dark.png", "combined_light.png"), path="figures/blood", width=16, height=10)
+ggsave(
+  ifelse(dark_bool, "combined_dark.png", "combined_light.png"), 
+  path="figures/blood", 
+  width=16, 
+  height=10
+)

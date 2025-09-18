@@ -2,18 +2,16 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
-source("functions.R")
 
 
 
-get_info <- function(file) {
+get_raw <- function(file) {
   assay <- str_split_i(file, "_", 5) %>%
     str_remove(".xlsx")
   reaction <- str_split_i(file, "/", 3) %>%
     str_remove(".xlsx")
   
-  organize_tables(file) %>%
-    convert_tables() %>%
+  get_quic(file) %>%
     mutate(
       Dilutions = -log10(as.numeric(Dilutions)),
       Assay = assay,
@@ -23,59 +21,21 @@ get_info <- function(file) {
       `Sample IDs`, 
       "_", 
       names=c("Treatment", "Sample IDs"),
-      too_few="align_start"
+      too_few="align_end"
     )
 }
 
 files <- list.files("raw/blood", ".xlsx", full.names = TRUE)
 
-meta <- lapply(files, get_info) %>%
+df_ <- lapply(files, get_raw) %>%
   bind_rows()
 
-locs <- lapply(files, get_sample_locations) %>%
-  bind_rows() %>%
-  separate_wider_delim(
-    IDs, 
-    "_", 
-    names=c("Treatment", "Sample IDs"),
-    too_few="align_start"
-  ) %>%
-  mutate(
-    Dilutions = meta$Dilutions,
-    Assay = meta$Assay,
-    Reaction = meta$Reaction
-  )
-
-df_ <- lapply(files, get_raw) %>%
-  bind_rows() %>%
-  # rename("Preparation" = "Sample IDs") %>%
-  mutate(`Sample IDs` = meta$`Sample IDs`) %>%
-  mutate_at(2:ncol(.), as.numeric)
-
-norm <- normalize_RFU(df_, transposed = TRUE)
-
-# calcs <- calculate_metrics(norm, meta) %>%
-#   mutate(
-#     Assay = meta$Assay,
-#     # Dilutions = meta$Dilutions,
-#     crossed = TtT != 72
-#   )
-
-calcs <- data.frame(
-  `Sample IDs` = meta$`Sample IDs`,
-  Treatment = meta$Treatment,
-  Dilutions = meta$Dilutions,
-  Assay = meta$Assay,
-  Reaction = meta$Reaction,
-  check.names = FALSE
+calcs <- calculate_metrics(
+  df_, 
+  "Sample IDs", "Wells", "Treatment", "Dilutions", "Assay", "Reaction", 
+  threshold=2.7
 ) %>%
-  mutate(
-    MPR = calculate_MPR(norm),
-    MS = calculate_MS(norm),
-    TtT = calculate_TtT(norm, 3),
-    RAF = 1/TtT,
-    crossed = TtT != 96
-  )
+  mutate(crossed = TtT != max(df_$Time))
 
 df_sum <- calcs %>%
   group_by(`Sample IDs`, Treatment, Dilutions, Assay, Reaction) %>%
@@ -88,27 +48,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-df_ <- df_ %>%
-  mutate(
-    Treatment = meta$Treatment,
-    Dilutions = meta$Dilutions,
-    Assay = meta$Assay,
-    Reaction = meta$Reaction
-  ) %>%
-  relocate(c(Treatment, Dilutions, Assay), .after = `Sample IDs`)
-
-norm <- norm %>%
-  mutate(
-    Treatment = meta$Treatment,
-    Dilutions = meta$Dilutions,
-    Assay = meta$Assay,
-    Reaction = meta$Reaction
-  ) %>%
-  relocate(c(Treatment, Dilutions, Assay), .after = `Sample IDs`)
-
 write.csv(df_, "data/blood/raw.csv", row.names = FALSE)
-write.csv(norm, "data/blood/norm.csv", row.names = FALSE)
-write.csv(locs, "data/blood/locs.csv", row.names = FALSE)
 write.csv(calcs, "data/blood/calcs.csv", row.names = FALSE)
 write.csv(df_sum, "data/blood/summary.csv", row.names = FALSE)
 
