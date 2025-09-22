@@ -50,4 +50,6 @@ rsconnect/
 
 *.pdf
 *.png
-*.csv
+raw.csv
+calcs.csv
+summary.csv
