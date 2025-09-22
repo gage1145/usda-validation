@@ -71,16 +71,17 @@ df_ %>%
   ggplot(aes(`Animal IDs`, RAF, fill = Assay)) +
   geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
   geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
-  facet_grid(rows=vars(Months), space = "free") +
-  scale_y_log10() +
+  facet_grid(cols=vars(Months), space = "free") +
+  # scale_y_log10() +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
+  coord_flip() +
   labs(
     y="Rate of Amyloid Formation (1/s)"
   ) +
   {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
   theme(
-    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
     legend.position = c(0.85, 0.85),
     legend.title = element_blank(),
@@ -88,7 +89,7 @@ df_ %>%
   )
 ggsave(
   ifelse(dark_bool, "dark_RAFs.png", "light_RAFs.png"), 
-  path="figures/oral-swabs", width=8, height=12
+  path="figures/oral-swabs", width=16, height=8
 )
 
 
