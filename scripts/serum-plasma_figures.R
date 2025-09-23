@@ -99,8 +99,17 @@ ggsave("boxplot.png", path="figures/serum-plasma", width=12, height=6)
 
 
 df_raw %>%
-  filter(Sample == "plasma", Treatment == "pellet", Dilutions == 0, Assay == "Nano-QuIC") %>%
+  filter(Sample == "plasma", Treatment == "pellet", Dilutions == -1, Assay == "Nano-QuIC") %>%
   ggplot(aes(Time, Norm, group=Wells)) +
   geom_line() +
   scale_x_continuous(breaks=seq(0,96,12), expand=expansion()) +
-  ggtitle("Plasma, Pellet, 10-1, Nano-QuIC")
+  ggtitle("Plasma, Pellet, 10-1, Nano-QuIC") +
+  theme(
+    axis.title = element_text(size=16),
+    axis.text = element_text(size=12),
+    strip.text = element_text(size=16, face="bold"),
+    legend.title = element_text(size=12, face="bold", hjust=0.5),
+    legend.text = element_text(size=12, hjust=0.5),
+    plot.title = element_text(size=20, hjust=0.5)
+  )
+ggsave("selected_raw.png", path="figures/serum-plasma", width=12, height=6)
