@@ -3,6 +3,10 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 
+readRenviron(".Renviron")
+threshold <- as.numeric(Sys.getenv("THRESHOLD"))
+norm_point <- as.integer(Sys.getenv("NORM_POINT"))
+
 
 
 files <- list.files("raw/necropsy", ".xlsx", full.names = TRUE)
@@ -14,7 +18,7 @@ get_raw <- function(file) {
     str_remove(".xlsx")
   
   file %>%
-    get_quic(norm_point=4) %>%
+    get_quic(norm_point=norm_point) %>%
     mutate(
       Dilutions = -log10(as.numeric(Dilutions)),
       Assay = assay,
@@ -26,7 +30,7 @@ df_ <- lapply(files, get_raw) %>%
     bind_rows()
 
 calcs <- calculate_metrics(
-  df_, "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction", threshold=2.7
+  df_, "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction", threshold=threshold
 ) %>%
   mutate(
     crossed = TtT != 72

@@ -3,6 +3,10 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 
+readRenviron(".Renviron")
+threshold <- as.numeric(Sys.getenv("THRESHOLD"))
+norm_point <- as.integer(Sys.getenv("NORM_POINT"))
+
 
 
 # Metadata key for linking swabs to animals and timepoints.
@@ -22,7 +26,7 @@ get_raw <- function(file) {
     str_remove(".xlsx")
   
   file %>%
-    get_quic(norm_point=4) %>%
+    get_quic(norm_point=norm_point) %>%
     mutate(
       Dilutions = -log10(as.numeric(Dilutions)),
       Assay = assay,
@@ -42,11 +46,10 @@ calculate <- function (assay) {
   # I have to do it this way to apply a different threshold to each assay.
   df_ %>%
     filter(Assay == assay) %>%
-    mutate(Threshold = ifelse(assay == "Nano-QuIC", 2.7, 2)) %>%
     calculate_metrics(
       "Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
-      "Reaction", "Threshold",
-      threshold=ifelse(assay == "Nano-QuIC", 2.7, 2)
+      "Reaction",
+      threshold=threshold
     ) %>%
     mutate(
       crossed = TtT != max(df_$Time)
@@ -59,7 +62,7 @@ calcs <- lapply(c("Nano-QuIC", "RT-QuIC"), calculate) %>%
 
 df_sum <- calcs %>%
   group_by(
-    `Sample IDs`, `Animal IDs`, Months, Dilutions, Assay, Reaction, Threshold
+    `Sample IDs`, `Animal IDs`, Months, Dilutions, Assay, Reaction
   ) %>%
   summarize(
     reps = n(),
