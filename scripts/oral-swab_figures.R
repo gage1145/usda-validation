@@ -69,7 +69,6 @@ results <- read.csv("data/oral-swabs/summary.csv", check.names = FALSE) %>%
 
 df_ %>%
   ggplot(aes(`Animal IDs`, RAF, fill = Assay)) +
-  # geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
   geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
   facet_grid(cols=vars(Months), space = "free") +
   scale_y_log10() +
