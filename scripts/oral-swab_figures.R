@@ -46,13 +46,15 @@ df_ <- read.csv("data/oral-swabs/calcs.csv", check.names = FALSE) %>%
   na.omit() %>%
   mutate(
     Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")),
-    Months = as.factor(Months)
+    Months = as.numeric(Months)
   )
 
 df_sum <- df_ %>%
   group_by(`Sample IDs`, `Animal IDs`, Months, Dilutions, Assay) %>%
   summarize(
-    median_RAF = median(RAF)
+    median_RAF = median(RAF),
+    mean_RAF = mean(RAF),
+    mean_MPR = mean(MPR)
   )
 
 results <- read.csv("data/oral-swabs/summary.csv", check.names = FALSE) %>%
@@ -67,23 +69,26 @@ results <- read.csv("data/oral-swabs/summary.csv", check.names = FALSE) %>%
 
 
 
-df_ %>%
-  ggplot(aes(`Animal IDs`, RAF, fill = Assay)) +
-  geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
-  facet_grid(cols=vars(Months), space = "free") +
-  scale_y_log10() +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-  coord_flip() +
+df_sum %>%
+  ggplot(aes(Months, mean_RAF, color = `Animal IDs`, fill = `Animal IDs`)) +
+  # geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
+  # geom_col(position="identity") +
+  geom_area(position="dodge", alpha=0.2) +
+  facet_grid(cols=vars(Assay)) +
+  scale_x_continuous(breaks=seq(0, 60, 3)) +
+  coord_transform(
+    y="log10",
+    ylim=c(min(df_sum$mean_RAF), 1.1 * max(df_sum$mean_RAF)), expand=FALSE) +
   labs(
     y="Rate of Amyloid Formation (1/s)"
   ) +
   {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
   theme(
+    # panel.grid.major.y = element_line(color="black", linetype="dashed", linewidth = 0.2),
     axis.title.y = element_blank(),
     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
     # legend.position = c(0.85, 0.85),
-    legend.position = "top",
+    legend.position = "none",
     legend.title = element_blank(),
     legend.background = element_blank()
   )
