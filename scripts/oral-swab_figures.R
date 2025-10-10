@@ -97,8 +97,26 @@ ggsave(
   path="figures/oral-swabs", width=16, height=8
 )
 
-
 df_ %>%
+  filter(crossed) %>%
+  ggplot(aes(Months, RAF)) +
+  stat_density_2d(
+    geom="raster",
+    aes(fill=after_stat(density)),
+    contour=FALSE,
+    # n=10,
+    show.legend=FALSE
+  ) + 
+  scale_fill_gradientn(
+    colors=c("#101010", "#202854", "#006d91", "#00ba92", "#88ffa5")
+  ) +
+  facet_grid(vars(Assay)) +
+  scale_x_continuous(breaks=seq(0, 60, 3)) +
+  coord_cartesian(expand=FALSE) +
+  dark_theme
+
+
+dfgeom_density2d_filled()df_ %>%
   arrange(desc(Months)) %>%
   ggplot(aes(MPR, fct_inorder(Months), fill=stat(x))) +
   ggridges::geom_density_ridges_gradient() +
