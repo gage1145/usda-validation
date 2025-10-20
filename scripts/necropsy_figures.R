@@ -13,6 +13,7 @@ library(forcats)
 dark_bool = FALSE
 
 main_theme <- theme(
+  plot.title = element_text(size=24, hjust=0.5),
   axis.title = element_text(size=20),
   axis.text = element_text(size=16),
   strip.text = element_text(size=16, face="bold"),
@@ -62,12 +63,6 @@ df_sum <- df_ %>%
   )
 
 df_sum_sum <- df_ %>%
-  # mutate(
-  #   Dilutions = factor(
-  #     Dilutions, 
-  #     levels=c(-2, -3, -4), 
-  #     labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
-  # ) %>%
   group_by(Tissue, Assay, Dilutions) %>%
   summarize(
     mean_RAF = mean(RAF),
@@ -104,6 +99,7 @@ df_ %>%
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
   scale_y_continuous(sec.axis = sec_axis(~ ., name = "Dilution Factor", breaks = NULL)) +
   labs(
+    title="Comparing Assay Kinetics between Tissues",
     y="Rate of Amyloid Formation (1/s)"
   ) +
   {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
@@ -140,6 +136,7 @@ df_ %>%
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
   scale_y_discrete(expand=c(0.2, 0)) +
   labs(
+    title="Density of Assay Kinetics",
     x="Rate of Amyloid Formation (1/h)",
     y="Log Dilution Factors"
   ) +
@@ -182,6 +179,7 @@ df_sum_sum %>%
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
   scale_y_continuous(breaks=seq(0, 0.2, 0.02)) +
   labs(
+    title="General Assay Comparisons",
     y="Mean RAF",
     x="Log Dilution Factors"
   ) +
