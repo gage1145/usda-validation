@@ -10,11 +10,11 @@ library(forcats)
 
 
 
-dark_bool = T
+dark_bool = FALSE
 
 main_theme <- theme(
   axis.title = element_text(size=20),
-  axis.text = element_text(size=12),
+  axis.text = element_text(size=16),
   strip.text = element_text(size=16, face="bold"),
   legend.title = element_text(size=12),
   legend.text = element_text(size=12)
@@ -26,7 +26,7 @@ dark_theme <- theme(
   plot.title       = element_text(hjust = 0.5, vjust=2, size = 16,
                                   face = "bold", color="white"),
   plot.background  = element_rect(fill="#1f1f1f", color="#1f1f1f"),
-  panel.grid       = element_line(color="white"),
+  panel.grid       = element_line(color="#2f2f2f"),
   axis.text.y      = element_text(size = 12, color="white"),
   axis.title.y     = element_text(size = 14, color="white"),
   axis.title.x     = element_text(size = 14, color="white"),
@@ -59,6 +59,21 @@ df_sum <- df_ %>%
       Dilutions, 
       levels=c(-2, -3, -4), 
       labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
+  )
+
+df_sum_sum <- df_ %>%
+  # mutate(
+  #   Dilutions = factor(
+  #     Dilutions, 
+  #     levels=c(-2, -3, -4), 
+  #     labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
+  # ) %>%
+  group_by(Tissue, Assay, Dilutions) %>%
+  summarize(
+    mean_RAF = mean(RAF),
+    sd_RAF = sd(RAF),
+    max_RAF = max(RAF),
+    min_RAF = min(RAF)
   )
 
 results <- read.csv("data/necropsy/summary.csv", check.names = FALSE) %>%
@@ -146,3 +161,35 @@ ggsave(
   ifelse(dark_bool, "dark_histograms.png", "light_histograms.png"), 
   path="figures/necropsy", width=16, height=8
 )
+
+
+
+# Mean RAF figures --------------------------------------------------------
+
+
+
+df_sum_sum %>%
+  ggplot(aes(
+    Dilutions, 
+    mean_RAF,
+    ymax=mean_RAF + sd_RAF,
+    ymin=mean_RAF - sd_RAF,
+    fill=Assay
+  )) +
+  geom_col(position="dodge", color="black") +
+  geom_errorbar(position=position_dodge(0.9), width=0.4) +
+  facet_grid(~Tissue, scales="free_x", space="free_x") +
+  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
+  scale_y_continuous(breaks=seq(0, 0.2, 0.02)) +
+  labs(
+    y="Mean RAF",
+    x="Log Dilution Factors"
+  ) +
+  main_theme +
+  theme(
+    # axis.title.x = element_blank(),
+    legend.position = c(0.9, 0.9),
+    legend.background = element_blank(),
+    legend.title = element_blank()
+  )
+ggsave("mean_RAF_col.png", path="figures/necropsy", width=16, height=8)
