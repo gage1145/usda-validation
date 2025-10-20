@@ -30,20 +30,20 @@ df_ <- lapply(files, get_raw) %>%
     bind_rows()
 
 calcs <- calculate_metrics(
-  df_, "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction", threshold=threshold
+  df_, 
+  "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction", 
+  threshold=threshold
 ) %>%
-  mutate(
-    crossed = TtT != 72
-  ) %>%
+  mutate(crossed = TtT != 72) %>%
   separate_wider_delim(
     "Sample IDs", 
     "_", 
-    names = c("Sample IDs", "Tissue"), 
+    names = c("Sample IDs", "Tissue", "Side"), 
     too_few = "align_start"
   )
 
 df_sum <- calcs %>%
-  group_by(`Sample IDs`, Dilutions, Assay, Tissue) %>%
+  group_by(`Sample IDs`, Dilutions, Assay, Tissue, Side) %>%
   summarize(
     reps = n(),
     mean_MPR = mean(MPR),

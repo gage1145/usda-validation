@@ -10,7 +10,7 @@ library(forcats)
 
 
 
-dark_bool = TRUE
+dark_bool = T
 
 main_theme <- theme(
   axis.title = element_text(size=20),
@@ -42,7 +42,8 @@ dark_theme <- theme(
 
 
 df_ <- read.csv("data/necropsy/calcs.csv", check.names = FALSE) %>%
-  na.omit() %>%
+  filter(!(`Sample IDs` %in% c("N", "P"))) %>%
+  # na.omit() %>%
   mutate(
     Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")),
   ) %>%
@@ -81,7 +82,7 @@ df_ %>%
       labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
   ) %>%
   ggplot(aes(fct_inorder(`Sample IDs`), RAF, fill = Assay)) +
-  geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
+  geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=1) +
   geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
   facet_grid(vars(fct_rev(Dilutions)), vars(Tissue), space = "free", labeller=label_parsed) +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
@@ -145,18 +146,3 @@ ggsave(
   ifelse(dark_bool, "dark_histograms.png", "light_histograms.png"), 
   path="figures/necropsy", width=16, height=8
 )
-
-
-
-# Logistic Curve ----------------------------------------------------------
-
-
-
-# results %>%
-#   mutate_at("thres_pos", as.integer) %>%
-#   ggplot(aes(mean_MPR, thres_pos, color=Dilutions, linetype = Assay)) +
-#   geom_smooth(
-#     method="glm",
-#     method.args = list(family = "binomial"), 
-#     se = FALSE
-#   )
