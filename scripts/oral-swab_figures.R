@@ -14,6 +14,7 @@ library(ggridges)
 dark_bool = F
 
 main_theme <- theme(
+  plot.title = element_text(size=24, hjust=0.5),
   axis.title = element_text(size=20),
   axis.text = element_text(size=12),
   strip.text = element_text(size=16, face="bold"),
@@ -69,26 +70,24 @@ results <- read.csv("data/oral-swabs/summary.csv", check.names = FALSE) %>%
 
 
 
-df_sum %>%
-  ggplot(aes(Months, mean_RAF, color = `Animal IDs`, fill = `Animal IDs`)) +
-  # geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
-  # geom_col(position="identity") +
-  geom_area(position="dodge", alpha=0.2) +
-  facet_grid(cols=vars(Assay)) +
-  scale_x_continuous(breaks=seq(0, 60, 3)) +
-  coord_transform(
-    y="log10",
-    ylim=c(min(df_sum$mean_RAF), 1.1 * max(df_sum$mean_RAF)), expand=FALSE) +
+df_ %>%
+  ggplot(aes(`Animal IDs`, RAF, fill = Assay)) +
+  geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
+  geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
+  facet_grid(cols=vars(Months), space = "free") +
+  scale_y_log10() +
+  scale_color_manual(values=c("darkslateblue", "darkorange")) +
+  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
+  coord_flip() +
   labs(
     y="Rate of Amyloid Formation (1/s)"
   ) +
   {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
   theme(
-    # panel.grid.major.y = element_line(color="black", linetype="dashed", linewidth = 0.2),
     axis.title.y = element_blank(),
     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
     # legend.position = c(0.85, 0.85),
-    legend.position = "none",
+    legend.position = "top",
     legend.title = element_blank(),
     legend.background = element_blank()
   )
@@ -97,14 +96,55 @@ ggsave(
   path="figures/oral-swabs", width=16, height=8
 )
 
+
+
+# Mean RAF Area Graph -----------------------------------------------------
+
+
+
+
+df_sum %>%
+  group_by(Months, Assay) %>%
+  summarize(mean_RAF = mean(mean_RAF)) %>%
+  ggplot(aes(
+    Months, 
+    mean_RAF, 
+    color = Assay,
+    fill = Assay
+  )) +
+  geom_area(position="dodge", alpha=0.2) +
+  scale_x_continuous(breaks=seq(0, 60, 3)) +
+  coord_transform(ylim=c(min(df_sum$mean_RAF), 0.03), expand=FALSE) +
+  labs(
+    y="Rate of Amyloid Formation (1/s)",
+    title="Mean RAFs of RT-QuIC vs. Nano-QuIC"
+  ) +
+  {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
+  theme(
+    axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
+    panel.grid.minor.x = element_blank(),
+    legend.position = "bottom",
+    legend.background = element_blank()
+  )
+ggsave(
+  ifelse(dark_bool, "dark_lines.png", "light_lines.png"), 
+  path="figures/oral-swabs", width=16, height=8
+)
+
+
+
+# Density Plot ------------------------------------------------------------
+
+
+
 df_ %>%
   filter(crossed) %>%
-  ggplot(aes(Months, RAF)) +
+  ggplot(aes(Months, MS)) +
   stat_density_2d(
     geom="raster",
     aes(fill=after_stat(density)),
     contour=FALSE,
-    # n=10,
+    # n=1000,
     show.legend=FALSE
   ) + 
   scale_fill_gradientn(
@@ -112,15 +152,7 @@ df_ %>%
   ) +
   facet_grid(vars(Assay)) +
   scale_x_continuous(breaks=seq(0, 60, 3)) +
+  scale_y_log10(breaks=seq(1, 12, 3), limits=c(0.4, 12)) +
   coord_cartesian(expand=FALSE) +
   dark_theme
-
-
-dfgeom_density2d_filled()df_ %>%
-  arrange(desc(Months)) %>%
-  ggplot(aes(MPR, fct_inorder(Months), fill=stat(x))) +
-  ggridges::geom_density_ridges_gradient() +
-  scale_fill_gradient(low="darkslateblue", high="darkorange") +
-  scale_x_log10() +
-  facet_grid(rows=vars(Assay))
 ggsave("figures/oral-swabs/ridges.png", width=12, height=8)
