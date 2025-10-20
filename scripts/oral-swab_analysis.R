@@ -4,7 +4,11 @@ library(tidyr)
 library(stringr)
 
 readRenviron(".Renviron")
+
+# I am using a threshold of 4.
 threshold <- as.numeric(Sys.getenv("THRESHOLD"))
+
+# I am using a normalization cycle of 8.
 norm_point <- as.integer(Sys.getenv("NORM_POINT"))
 
 
