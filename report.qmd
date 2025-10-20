@@ -1,17 +1,43 @@
 ---
 # title: "report"
 # author: "Gage Rowden"
-format: pdf
+format:
+  pdf:
+    documentclass: report
+    header-includes:
+      - \usepackage{fontspec}
+      - \usepackage{caption}
+      - \setmainfont{Calibri}
+      - \AtBeginDocument{\floatplacement{table}{H}}
+    geometry:
+      - top=1in
+      - bottom=1in
+      - left=1in
+      - right=1in
+    fontsize: 12pt
+  html:
+    embed-resources: true
+    code-background: true
+    page-layout: full
+format-links: false
+editor: source
 ---
 
-# Necropsy
-![](figures/necropsy/light_RAFs.png)
-![](figures/necropsy/light_histograms.png)
+## Necropsy
 
-# Whole Blood
+
+![Rates of amyloid formation of necropsy samples. Plot is facetted by tissue type and dilution factor. Samples are denoted on the x-axis. Generally, for obex, a dilution factor of 10$^{-4}$ is considered standard. For RAMALT and RPLN, a dilution factor of 10$^{-3}$. At standard dilutions, Nano-QuIC generally out-performs RT-QuIC. Notably, for sample B-227, Nano-QuIC had positive seeding activity at 10$^{-2}$ whereas RT-QuIC did not. This animal was euthanized 3 months into the study.](figures/necropsy/light_RAFs.png)
+
+![Density plots of rates of amyloid formation. For each sample type (obex, RAMALT, and RPLN), Nano-QuIC tends to have faster reaction kinetics.](figures/necropsy/light_histograms.png)
+
+![](figures/necropsy/mean_RAF_col.png)
+
+## Whole Blood
+
 ![](figures/blood/combined_light.png)
 
-# Oral Swabs
+## Oral Swabs
+
 ![](figures/oral-swabs/light_RAFs.png)
 
 ![](figures/oral-swabs/ridges.png)
