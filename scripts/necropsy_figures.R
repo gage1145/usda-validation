@@ -51,7 +51,7 @@ df_ <- read.csv("data/necropsy/calcs.csv", check.names = FALSE) %>%
   mutate_at("Dilutions", as.factor)
 
 df_sum <- df_ %>%
-  group_by(`Sample IDs`, Dilutions, Assay, Tissue) %>%
+  group_by(`Sample IDs`, Dilutions, Assay, Tissue, Side) %>%
   summarize(
     median_RAF = median(RAF)
   ) %>%

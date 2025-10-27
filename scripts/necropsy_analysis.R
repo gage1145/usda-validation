@@ -2,6 +2,7 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
+library(cli)
 
 readRenviron(".Renviron")
 threshold <- as.numeric(Sys.getenv("THRESHOLD"))
@@ -16,6 +17,8 @@ get_raw <- function(file) {
     str_remove(".xlsx")
   rxn <- str_split_i(file, "/", 3) %>%
     str_remove(".xlsx")
+  
+  cli_alert_info(sprintf("Analyzing %s", rxn))
   
   file %>%
     get_quic(norm_point=norm_point) %>%
