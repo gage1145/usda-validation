@@ -2,6 +2,7 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
+library(cli)
 
 readRenviron(".Renviron")
 
@@ -29,6 +30,8 @@ get_raw <- function(file) {
   rxn <- str_split_i(file, "/", 3) %>%
     str_remove(".xlsx")
   
+  cli_alert_info(sprintf("Reading file: %s", rxn))
+  
   file %>%
     get_quic(norm_point=norm_point) %>%
     mutate(
@@ -38,7 +41,9 @@ get_raw <- function(file) {
     ) %>%
     left_join(key) %>%
     select("Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
-           "Reaction", "Time", "RFU", "Norm", "Deriv")
+           "Reaction", "Time", "RFU", "Norm", "Deriv") %>%
+    suppressMessages() %>%
+    suppressWarnings()
 }
 
 files <- list.files("raw/oral-swabs", ".xlsx", full.names = TRUE)
