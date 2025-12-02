@@ -96,6 +96,16 @@ ggsave(
   path="figures/oral-swabs", width=16, height=8
 )
 
+df_sum %>%
+  ggplot(aes(Months, mean_RAF, color=Assay)) +
+  geom_line(linewidth=1) +
+  facet_wrap(vars(`Animal IDs`), nrow=3) +
+  main_theme +
+  theme(
+    legend.position = "bottom"
+  )
+
+ggsave("rafs_sample_facet.png", path="figures/oral-swabs", width=16, height=8)
 
 
 # Mean RAF Area Graph -----------------------------------------------------
