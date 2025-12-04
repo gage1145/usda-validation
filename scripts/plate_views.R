@@ -2,6 +2,7 @@ library(quicR)
 library(stringr)
 library(dplyr)
 library(ggplot2)
+library(cli)
 
 
 
@@ -16,8 +17,11 @@ main_theme <- theme(
 )
 
 get_pv <- function(file) {
-  name <- paste0(str_split_i(str_remove(file, ".xlsx"), "/", 3))
+  num_slash <- str_count(file, "/")
+  name <- paste0(str_split_i(str_remove(file, ".xlsx"), "/", num_slash + 1))
+  
   if (!file.exists(paste0("figures/plate_views/", name, ".png"))) {
+    cli_alert_info(sprintf("Working on figure %s", name))
     df <- get_quic(file) %>%
       mutate(Dilutions = -log10(as.numeric(Dilutions)))
     plate_view(df, sep=" ", plot_deriv=FALSE) +
@@ -28,6 +32,8 @@ get_pv <- function(file) {
         strip.text = element_text(size=10)
       )
     ggsave(paste0(name, ".png"), path="figures/plate_views", width=12, height=8)
+  } else {
+    cli_alert(sprintf("Figure already exists for %s", name))
   }
 }
 
