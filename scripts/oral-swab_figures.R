@@ -98,8 +98,12 @@ ggsave(
 
 df_sum %>%
   ggplot(aes(Months, mean_RAF, color=Assay)) +
-  geom_line(linewidth=1) +
+  geom_line(linewidth=1, alpha=0.7) +
   facet_wrap(vars(`Animal IDs`), nrow=3) +
+  scale_color_manual(values=c("darkslateblue", "darkorange")) +
+  labs(
+    y="Mean RAF"
+  ) +
   main_theme +
   theme(
     legend.position = "bottom"
@@ -161,7 +165,7 @@ df_ %>%
     colors=c("#101010", "#202854", "#006d91", "#00ba92", "#88ffa5")
   ) +
   facet_grid(vars(Assay)) +
-  scale_x_continuous(breaks=seq(0, 60, 3)) +
+  scale_x_continuous(breaks=seq(0, 66, 3)) +
   scale_y_log10(breaks=seq(1, 12, 3), limits=c(0.4, 12)) +
   coord_cartesian(expand=FALSE) +
   dark_theme
