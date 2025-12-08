@@ -30,7 +30,7 @@ get_raw <- function(file) {
   rxn <- str_split_i(file, "/", 3) %>%
     str_remove(".xlsx")
   
-  cli_alert_info(sprintf("Reading file: %s", rxn))
+  cli_alert_info(sprintf(" Reading file: %s", rxn))
   
   file %>%
     get_quic(norm_point=norm_point) %>%
@@ -49,7 +49,8 @@ get_raw <- function(file) {
 files <- list.files("raw/oral-swabs", ".xlsx", full.names = TRUE)
 
 df_ <- lapply(files, get_raw) %>%
-  bind_rows()
+  bind_rows() %>%
+  filter(tolower(`Sample IDs`) != "empty")
 
 calculate <- function (assay) {
   # I have to do it this way to apply a different threshold to each assay.
