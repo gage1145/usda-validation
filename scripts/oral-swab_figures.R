@@ -4,6 +4,7 @@ library(ggridges)
 library(ggpubr)
 library(forcats)
 library(ggridges)
+library(arrow)
 
 
 
@@ -43,7 +44,7 @@ dark_theme <- theme(
 
 
 
-df_ <- read.csv("data/oral-swabs/calcs.csv", check.names = FALSE) %>%
+df_ <- read_parquet("data/oral-swabs/calcs.parquet") %>%
   na.omit() %>%
   mutate(
     Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")),
@@ -58,7 +59,7 @@ df_sum <- df_ %>%
     mean_MPR = mean(MPR)
   )
 
-results <- read.csv("data/oral-swabs/summary.csv", check.names = FALSE) %>%
+results <- read_parquet("data/oral-swabs/summary.parquet") %>%
   na.omit() %>%
   mutate(
     Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC"))

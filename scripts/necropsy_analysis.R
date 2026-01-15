@@ -18,7 +18,7 @@ get_raw <- function(file) {
   rxn <- str_split_i(file, "/", 3) %>%
     str_remove(".xlsx")
   
-  cli_alert_info(sprintf("Analyzing %s", rxn))
+  cli_alert_info(sprintf(" Reading file: %s", rxn))
   
   file %>%
     get_quic(norm_point=norm_point) %>%
@@ -26,7 +26,9 @@ get_raw <- function(file) {
       Dilutions = -log10(as.numeric(Dilutions)),
       Assay = assay,
       Reaction = rxn
-    )
+    ) %>%
+    suppressMessages() %>%
+    suppressWarnings()
 }
 
 df_ <- lapply(files, get_raw) %>%
@@ -56,7 +58,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-write.csv(df_, "data/necropsy/raw.csv", row.names = FALSE)
-write.csv(calcs, "data/necropsy/calcs.csv", row.names = FALSE)
-write.csv(df_sum, "data/necropsy/summary.csv", row.names = FALSE)
+write_parquet(df_, "data/necropsy/raw.parquet")
+write_parquet(calcs, "data/necropsy/calcs.parquet")
+write_parquet(df_sum, "data/necropsy/summary.parquet")
 

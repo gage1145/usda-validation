@@ -2,6 +2,7 @@ library(quicR)
 library(dplyr)
 library(tidyr)
 library(stringr)
+library(arrow)
 
 readRenviron(".Renviron")
 threshold <- as.numeric(Sys.getenv("THRESHOLD"))
@@ -52,7 +53,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-write.csv(df_, "data/blood/raw.csv", row.names = FALSE)
-write.csv(calcs, "data/blood/calcs.csv", row.names = FALSE)
-write.csv(df_sum, "data/blood/summary.csv", row.names = FALSE)
+write_parquet(df_, "data/blood/raw.parquet")
+write_parquet(calcs, "data/blood/calcs.parquet")
+write_parquet(df_sum, "data/blood/summary.parquet")
 

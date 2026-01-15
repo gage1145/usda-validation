@@ -3,18 +3,16 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(cli)
+library(arrow)
+
+
 
 readRenviron(".Renviron")
 
-# I am using a threshold of 4.
 threshold <- as.numeric(Sys.getenv("THRESHOLD"))
-
-# I am using a normalization cycle of 8.
 norm_point <- as.integer(Sys.getenv("NORM_POINT"))
 
-
-
-# Metadata key for linking swabs to animals and timepoints.
+# Metadata key for linking swabs to animals and time points.
 key <- read.csv("data/RAMALT/meta.csv", check.names = FALSE) %>%
   select("Sample IDs", "Animal IDs", "Months") %>%
   mutate(
@@ -33,6 +31,7 @@ get_raw <- function(file) {
   file %>%
     get_quic(norm_point=norm_point) %>%
     mutate(
+      `Sample IDs` = as.factor(str_remove(`Sample IDs`, "-P")),
       Dilutions = -log10(as.numeric(Dilutions)),
       Assay = assay,
       Reaction = rxn
@@ -81,7 +80,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-write.csv(df_,    "data/RAMALT/raw.csv",     row.names = FALSE)
-write.csv(calcs,  "data/RAMALT/calcs.csv",   row.names = FALSE)
-write.csv(df_sum, "data/RAMALT/summary.csv", row.names = FALSE)
+write_parquet(df_,    "data/RAMALT/raw.parquet")
+write_parquet(calcs,  "data/RAMALT/calcs.parquet")
+write_parquet(df_sum, "data/RAMALT/summary.parquet")
 

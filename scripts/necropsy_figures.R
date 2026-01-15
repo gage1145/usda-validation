@@ -3,6 +3,7 @@ library(ggplot2)
 library(ggridges)
 library(ggpubr)
 library(forcats)
+library(arrow)
 
 
 
@@ -42,7 +43,8 @@ dark_theme <- theme(
 
 
 
-df_ <- read.csv("data/necropsy/calcs.csv", check.names = FALSE) %>%
+# df_ <- read.csv("data/necropsy/calcs.csv", check.names = FALSE) %>%
+df_ <- read_parquet("data/necropsy/calcs.parquet") %>%  
   filter(!(`Sample IDs` %in% c("N", "P"))) %>%
   # na.omit() %>%
   mutate(
@@ -71,7 +73,8 @@ df_sum_sum <- df_ %>%
     min_RAF = min(RAF)
   )
 
-results <- read.csv("data/necropsy/summary.csv", check.names = FALSE) %>%
+# results <- read.csv("data/necropsy/summary.csv", check.names = FALSE) %>%
+results <- read_parquet("data/necropsy/summary.parquet") %>%
   na.omit() %>%
   mutate_at("Dilutions", as.factor) %>%
   mutate(

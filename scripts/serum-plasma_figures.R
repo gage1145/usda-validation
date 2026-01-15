@@ -42,7 +42,7 @@ dark_theme <- theme(
 
 
 
-df_ <- read.csv("data/serum-plasma/calcs.csv", check.names = FALSE) %>%
+df_ <- read_parquet("data/serum-plasma/calcs.parquet") %>%
   filter(!(Sample %in% c("P", "N"))) %>%
   na.omit() %>%
   mutate(
@@ -58,7 +58,8 @@ df_sum <- df_ %>%
     median_RAF = median(RAF)
   )
 
-results <- read.csv("data/serum-plasma/summary.csv", check.names = FALSE) %>%
+# results <- read.csv("data/serum-plasma/summary.csv", check.names = FALSE) %>%
+results <- read_parquet("data/serum-plasma/summary.parquet") %>%  
   filter(!(Sample %in% c("P", "N"))) %>%
   na.omit() %>%
   mutate(
@@ -68,7 +69,7 @@ results <- read.csv("data/serum-plasma/summary.csv", check.names = FALSE) %>%
     Dilutions = factor(Dilutions, level=c(0, -1, -2, -3, -4))
   )
 
-df_raw <- read.csv("data/serum-plasma/raw.csv", check.names = FALSE) %>%
+df_raw <- read_parquet("data/serum-plasma/raw.parquet") %>%
   mutate_at(c("Sample", "Treatment", "Dilutions", "Assay"), as.factor)
 
 

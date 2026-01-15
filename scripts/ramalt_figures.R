@@ -4,6 +4,7 @@ library(ggridges)
 library(ggpubr)
 library(forcats)
 library(ggridges)
+library(arrow)
 
 
 
@@ -43,7 +44,7 @@ dark_theme <- theme(
 
 
 
-df_ <- read.csv("data/RAMALT/calcs.csv", check.names = FALSE) %>%
+df_ <- read_parquet("data/RAMALT/calcs.parquet") %>%
   na.omit() %>%
   mutate(
     Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")),
@@ -58,7 +59,7 @@ df_sum <- df_ %>%
     mean_MPR = mean(MPR)
   )
 
-results <- read.csv("data/RAMALT/summary.csv", check.names = FALSE) %>%
+results <- read_parquet("data/RAMALT/summary.parquet") %>%
   na.omit() %>%
   mutate(
     Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC"))
@@ -71,8 +72,8 @@ results <- read.csv("data/RAMALT/summary.csv", check.names = FALSE) %>%
 
 
 df_ %>%
-  ggplot(aes(`Animal IDs`, RAF, fill = Assay)) +
-  geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
+  ggplot(aes(`Animal IDs`, MPR, fill = Assay)) +
+  geom_line(aes(y=mean_MPR, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
   geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
   facet_grid(cols=vars(Months), space = "free") +
   scale_y_log10() +
@@ -86,7 +87,6 @@ df_ %>%
   theme(
     axis.title.y = element_blank(),
     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-    # legend.position = c(0.85, 0.85),
     legend.position = "top",
     legend.title = element_blank(),
     legend.background = element_blank()

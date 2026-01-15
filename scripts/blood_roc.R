@@ -7,7 +7,7 @@ library(pROC)
 
 
 
-df_ <- read.csv("data/blood/calcs.csv", check.names = FALSE) %>%
+df_ <- read_parquet("data/blood/calcs.parquet") %>%
   filter(!(`Sample IDs` %in% c("P", "N"))) %>%
   na.omit() %>%
   mutate(

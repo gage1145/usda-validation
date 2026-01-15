@@ -83,7 +83,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-write.csv(df_, "data/oral-swabs/raw.csv", row.names = FALSE)
-write.csv(calcs, "data/oral-swabs/calcs.csv", row.names = FALSE)
-write.csv(df_sum, "data/oral-swabs/summary.csv", row.names = FALSE)
+write_parquet(df_, "data/oral-swabs/raw.parquet")
+write_parquet(calcs, "data/oral-swabs/calcs.parquet")
+write_parquet(df_sum, "data/oral-swabs/summary.parquet")
 

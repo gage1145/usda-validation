@@ -52,7 +52,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-write.csv(df_, "data/serum-plasma/raw.csv", row.names = FALSE)
-write.csv(calcs, "data/serum-plasma/calcs.csv", row.names = FALSE)
-write.csv(df_sum, "data/serum-plasma/summary.csv", row.names = FALSE)
+write_parquet(df_, "data/serum-plasma/raw.parquet")
+write_parquet(calcs, "data/serum-plasma/calcs.parquet")
+write_parquet(df_sum, "data/serum-plasma/summary.parquet")
 

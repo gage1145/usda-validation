@@ -42,7 +42,7 @@ dark_theme <- theme(
 
 
 
-df_ <- read.csv("data/blood/calcs.csv", check.names = FALSE) %>%
+df_ <- read_parquet("data/blood/calcs.parquet") %>%
   filter(!(`Sample IDs` %in% c("P", "N"))) %>%
   na.omit() %>%
   mutate(
@@ -57,7 +57,7 @@ df_sum <- df_ %>%
     median_RAF = median(RAF)
   )
 
-results <- read.csv("data/blood/summary.csv", check.names = FALSE) %>%
+results <- read_parquet("data/blood/summary.parquet") %>%
   filter(!(`Sample IDs` %in% c("P", "N"))) %>%
   na.omit() %>%
   mutate(
@@ -66,7 +66,7 @@ results <- read.csv("data/blood/summary.csv", check.names = FALSE) %>%
     Dilutions = factor(Dilutions, level=c(0, -1, -2, -3, -4))
   )
 
-df_raw <- read.csv("data/blood/raw.csv", check.names = FALSE) %>%
+df_raw <- read_parquet("data/blood/raw.parquet") %>%
   mutate_at(c("Sample IDs", "Treatment", "Dilutions", "Assay"), as.factor)
 
 
