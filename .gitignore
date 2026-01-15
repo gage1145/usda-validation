@@ -50,7 +50,5 @@ rsconnect/
 
 *.pdf
 *.png
-raw.csv
-calcs.csv
-summary.csv
+*.parquet
 nul
