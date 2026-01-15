@@ -29,7 +29,9 @@ get_raw <- function(file) {
       "_", 
       names=c("Treatment", "Sample IDs"),
       too_few="align_end"
-    )
+    ) %>%
+    suppressMessages() %>%
+    suppressWarnings()
 }
 
 df_ <- lapply(files, get_raw) %>%
