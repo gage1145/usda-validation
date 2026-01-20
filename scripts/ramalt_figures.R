@@ -71,45 +71,47 @@ results <- read_parquet("data/RAMALT/summary.parquet") %>%
 
 
 
-df_ %>%
-  ggplot(aes(`Animal IDs`, MPR, fill = Assay)) +
-  geom_line(aes(y=mean_MPR, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
-  geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
-  facet_grid(cols=vars(Months), space = "free") +
-  scale_y_log10() +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-  coord_flip() +
-  labs(
-    y="Rate of Amyloid Formation (1/s)"
-  ) +
-  {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
-  theme(
-    axis.title.y = element_blank(),
-    axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-    legend.position = "top",
-    legend.title = element_blank(),
-    legend.background = element_blank()
-  )
-ggsave(
-  ifelse(dark_bool, "dark_RAFs.png", "light_RAFs.png"), 
-  path="figures/RAMALT", width=16, height=8
-)
+# df_ %>%
+#   ggplot(aes(`Animal IDs`, MPR, fill = Assay)) +
+#   geom_line(aes(y=mean_MPR, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
+#   geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
+#   facet_grid(cols=vars(Months), rows=vars(Dilutions), space = "free") +
+#   scale_y_log10() +
+#   scale_color_manual(values=c("darkslateblue", "darkorange")) +
+#   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
+#   coord_flip() +
+#   labs(
+#     y="Rate of Amyloid Formation (1/s)"
+#   ) +
+#   {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
+#   theme(
+#     axis.title.y = element_blank(),
+#     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
+#     legend.position = "top",
+#     legend.title = element_blank(),
+#     legend.background = element_blank()
+#   )
+# ggsave(
+#   ifelse(dark_bool, "dark_RAFs.png", "light_RAFs.png"), 
+#   path="figures/RAMALT", width=16, height=8
+# )
 
-df_sum %>%
-  ggplot(aes(Months, mean_RAF, color=Assay)) +
-  geom_line(linewidth=1, alpha=0.7) +
-  facet_wrap(vars(`Animal IDs`), nrow=3) +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  labs(
-    y="Mean RAF"
-  ) +
-  main_theme +
-  theme(
-    legend.position = "bottom"
-  )
-
-ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=16, height=8)
+# df_sum %>%
+#   mutate(Dilutions = as.factor(Dilutions)) %>%
+#   ggplot(aes(Months, mean_RAF, color=Assay)) +
+#   geom_line(linewidth=1, alpha=0.7) +
+#   facet_wrap(vars(`Animal IDs`, Dilutions), nrow=3) +
+#   scale_color_manual(values=c("darkslateblue", "darkorange")) +
+#   scale_x_continuous(breaks=seq(0, 66, 3)) +
+#   labs(
+#     y="Mean RAF"
+#   ) +
+#   main_theme +
+#   theme(
+#     legend.position = "bottom"
+#   )
+# 
+# ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=16, height=8)
 
 
 # Mean RAF Area Graph -----------------------------------------------------
@@ -118,7 +120,8 @@ ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=16, height=8)
 
 
 df_sum %>%
-  group_by(Months, Assay) %>%
+  mutate_at("Dilutions", as.factor) %>%
+  group_by(Months, Assay, Dilutions) %>%
   summarize(mean_RAF = mean(mean_RAF)) %>%
   ggplot(aes(
     Months, 
@@ -128,7 +131,8 @@ df_sum %>%
   )) +
   geom_area(position="dodge", alpha=0.2) +
   scale_x_continuous(breaks=seq(0, 60, 3)) +
-  coord_transform(ylim=c(min(df_sum$mean_RAF), 0.03), expand=FALSE) +
+  coord_transform(ylim=c(min(df_sum$mean_RAF), 0.04), expand=FALSE) +
+  facet_grid(vars(Dilutions)) +
   labs(
     y="Rate of Amyloid Formation (1/s)",
     title="Mean RAFs of RT-QuIC vs. Nano-QuIC"
@@ -142,7 +146,7 @@ df_sum %>%
   )
 ggsave(
   ifelse(dark_bool, "dark_lines.png", "light_lines.png"), 
-  path="figures/RAMALT", width=16, height=8
+  path="figures/RAMALT", width=8, height=8
 )
 
 
@@ -153,20 +157,20 @@ ggsave(
 
 df_ %>%
   filter(crossed) %>%
-  ggplot(aes(Months, MS)) +
+  ggplot(aes(Months, RAF)) +
   stat_density_2d(
     geom="raster",
     aes(fill=after_stat(density)),
     contour=FALSE,
-    # n=1000,
+    n=250,
     show.legend=FALSE
   ) + 
   scale_fill_gradientn(
-    colors=c("#101010", "#202854", "#006d91", "#00ba92", "#88ffa5")
+    colors=c("#101010", "#202854", "#006d91", "#00ba92", "#88ffa5", "yellow")
   ) +
-  facet_grid(vars(Assay)) +
+  facet_grid(vars(Assay), vars(Dilutions)) +
   scale_x_continuous(breaks=seq(0, 66, 3)) +
-  scale_y_log10(breaks=seq(1, 12, 3), limits=c(0.4, 12)) +
+  # scale_y_log10(breaks=seq(1, 12, 3), limits=c(0.4, 12)) +
   coord_cartesian(expand=FALSE) +
   dark_theme
 ggsave("figures/RAMALT/ridges.png", width=12, height=8)
