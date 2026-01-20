@@ -121,12 +121,31 @@ df_ %>%
   ggplot(aes(Dilutions, MPR, fill=response)) + 
   geom_boxplot() + 
   facet_grid(vars(Assay), vars(Treatment, Substrate_conc)) +
-  scale_y_log10() +
+  # scale_y_log10() +
   scale_fill_manual(values=c("darkcyan", "red")) +
   main_theme +
   theme(
     legend.title = element_blank(),
     legend.position = "bottom"
   )
-ggsave("boxplot.png", path="figures/blood", width=12, height=8)
+ggsave("mpr_boxplot.png", path="figures/blood", width=12, height=8)
+
+df_ %>%
+  filter(Treatment %in% c("A", "B")) %>%
+  mutate(
+    Dilutions = as.factor(Dilutions),
+    response = ifelse(response, "Pos", "Neg")  
+  ) %>%
+  ggplot(aes(Dilutions, RAF, fill=response)) + 
+  geom_boxplot() + 
+  facet_grid(vars(Assay), vars(Treatment, Substrate_conc)) +
+  # scale_y_log10() +
+  scale_fill_manual(values=c("darkcyan", "red")) +
+  main_theme +
+  theme(
+    legend.title = element_blank(),
+    legend.position = "bottom"
+  )
+ggsave("raf_boxplot.png", path="figures/blood", width=12, height=8)
+
 
