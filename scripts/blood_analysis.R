@@ -3,6 +3,7 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(arrow)
+library(cli)
 
 readRenviron(".Renviron")
 threshold <- as.numeric(Sys.getenv("THRESHOLD"))
@@ -10,19 +11,28 @@ norm_point <- as.integer(Sys.getenv("NORM_POINT"))
 
 
 
-files <- list.files("raw/blood", ".xlsx", full.names = TRUE)
+files <- list.files("raw/blood", ".xlsx", full.names = TRUE, recursive = TRUE)
 
 get_raw <- function(file) {
-  assay <- str_split_i(file, "_", 5) %>%
+  file_list <- str_split(file, "/")
+  
+  substrate_conc <- if ("2X" %in% file_list[[1]]) "2X" else "1X"
+  
+  split_count <- length(str_split(file, "_")[[1]])
+  
+  assay <- str_split_i(file, "_", split_count) %>%
     str_remove(".xlsx")
-  reaction <- str_split_i(file, "/", 3) %>%
+  reaction <- str_split_i(file, "/", length(file_list[[1]])) %>%
     str_remove(".xlsx")
+  
+  cli_alert_info(sprintf(" Reading file: %s", reaction))
   
   get_quic(file, norm_point=norm_point) %>%
     mutate(
       Dilutions = -log10(as.numeric(Dilutions)),
       Assay = assay,
-      Reaction = reaction
+      Reaction = reaction,
+      Substrate_conc = substrate_conc
     ) %>%
     separate_wider_delim(
       `Sample IDs`, 
@@ -39,13 +49,13 @@ df_ <- lapply(files, get_raw) %>%
 
 calcs <- calculate_metrics(
   df_, 
-  "Sample IDs", "Wells", "Treatment", "Dilutions", "Assay", "Reaction", 
+  "Sample IDs", "Wells", "Treatment", "Dilutions", "Assay", "Reaction", "Substrate_conc",
   threshold=threshold
 ) %>%
   mutate(crossed = TtT != max(df_$Time))
 
 df_sum <- calcs %>%
-  group_by(`Sample IDs`, Treatment, Dilutions, Assay, Reaction) %>%
+  group_by(`Sample IDs`, Treatment, Dilutions, Assay, Reaction, Substrate_conc) %>%
   summarize(
     reps = n(),
     mean_MPR = mean(MPR),
