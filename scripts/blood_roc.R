@@ -141,11 +141,12 @@ df_ %>%
   facet_grid(vars(Assay), vars(Treatment, Substrate_conc)) +
   # scale_y_log10() +
   scale_fill_manual(values=c("darkcyan", "red")) +
+  labs(
+    title="Rates of Amyloid Formation"
+  ) +
   main_theme +
   theme(
     legend.title = element_blank(),
     legend.position = "bottom"
   )
 ggsave("raf_boxplot.png", path="figures/blood", width=12, height=8)
-
-
