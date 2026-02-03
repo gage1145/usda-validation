@@ -15,6 +15,7 @@ library(arrow)
 dark_bool = F
 
 main_theme <- theme(
+  plot
   plot.title = element_text(size=24, hjust=0.5),
   axis.title = element_text(size=20),
   axis.text = element_text(size=12),
@@ -96,22 +97,27 @@ results <- read_parquet("data/RAMALT/summary.parquet") %>%
 #   path="figures/RAMALT", width=16, height=8
 # )
 
-# df_sum %>%
-#   mutate(Dilutions = as.factor(Dilutions)) %>%
-#   ggplot(aes(Months, mean_RAF, color=Assay)) +
-#   geom_line(linewidth=1, alpha=0.7) +
-#   facet_wrap(vars(`Animal IDs`, Dilutions), nrow=3) +
-#   scale_color_manual(values=c("darkslateblue", "darkorange")) +
-#   scale_x_continuous(breaks=seq(0, 66, 3)) +
-#   labs(
-#     y="Mean RAF"
-#   ) +
-#   main_theme +
-#   theme(
-#     legend.position = "bottom"
-#   )
-# 
-# ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=16, height=8)
+df_sum %>%
+  filter(Dilutions == -3) %>%
+  mutate(Dilutions = as.factor(Dilutions)) %>%
+  ggplot(aes(Months, mean_RAF, color=`Assay`)) +
+  # geom_line(linewidth=1, alpha=0.7) +
+  geom_smooth() +
+  # facet_grid(rows=vars(`Animal IDs`), cols=vars(Dilutions)) +
+  facet_wrap(vars(`Animal IDs`), nrow=3) +
+  scale_color_manual(values=c("darkslateblue", "darkorange")) +
+  scale_x_continuous(breaks=seq(0, 66, 3)) +
+  labs(
+    title="Mean RAF per Sample at 10^-3",
+    y="Mean RAF"
+  ) +
+  main_theme +
+  # guides(color = guide_legend(ncol = 1)) +
+  theme(
+    legend.position = "bottom",
+  )
+
+ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=14, height=8)
 
 
 # Mean RAF Area Graph -----------------------------------------------------
