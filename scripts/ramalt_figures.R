@@ -15,7 +15,6 @@ library(arrow)
 dark_bool = F
 
 main_theme <- theme(
-  plot
   plot.title = element_text(size=24, hjust=0.5),
   axis.title = element_text(size=20),
   axis.text = element_text(size=12),
@@ -72,31 +71,6 @@ results <- read_parquet("data/RAMALT/summary.parquet") %>%
 
 
 
-# df_ %>%
-#   ggplot(aes(`Animal IDs`, MPR, fill = Assay)) +
-#   geom_line(aes(y=mean_MPR, color=Assay, group=Assay), data=df_sum, linewidth=0.6) +
-#   geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
-#   facet_grid(cols=vars(Months), rows=vars(Dilutions), space = "free") +
-#   scale_y_log10() +
-#   scale_color_manual(values=c("darkslateblue", "darkorange")) +
-#   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-#   coord_flip() +
-#   labs(
-#     y="Rate of Amyloid Formation (1/s)"
-#   ) +
-#   {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
-#   theme(
-#     axis.title.y = element_blank(),
-#     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-#     legend.position = "top",
-#     legend.title = element_blank(),
-#     legend.background = element_blank()
-#   )
-# ggsave(
-#   ifelse(dark_bool, "dark_RAFs.png", "light_RAFs.png"), 
-#   path="figures/RAMALT", width=16, height=8
-# )
-
 df_sum %>%
   filter(Dilutions == -3) %>%
   mutate(Dilutions = as.factor(Dilutions)) %>%
@@ -120,8 +94,8 @@ df_sum %>%
 ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=14, height=8)
 
 
-# Mean RAF Area Graph -----------------------------------------------------
 
+# Mean RAF Area Graph -----------------------------------------------------
 
 
 
