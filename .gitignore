@@ -52,3 +52,5 @@ rsconnect/
 *.png
 *.parquet
 nul
+.env
+.venv
