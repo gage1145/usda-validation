@@ -54,3 +54,4 @@ rsconnect/
 nul
 .env
 .venv
+__pycache__
