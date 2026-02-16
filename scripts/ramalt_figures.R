@@ -89,6 +89,7 @@ df_sum %>%
   # guides(color = guide_legend(ncol = 1)) +
   theme(
     legend.position = "bottom",
+    axis.text.x = element_text(angle=90, vjust=0.5, hjust=1, size=8)
   )
 
 ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=14, height=8)
@@ -111,7 +112,7 @@ df_sum %>%
   )) +
   geom_area(position="dodge", alpha=0.2) +
   scale_x_continuous(breaks=seq(0, 60, 3)) +
-  coord_transform(ylim=c(min(df_sum$mean_RAF), 0.055), expand=FALSE) +
+  coord_transform(ylim=c(min(df_sum$mean_RAF), 0.16), expand=FALSE) +
   facet_grid(vars(Dilutions)) +
   labs(
     y="Rate of Amyloid Formation (1/s)",
