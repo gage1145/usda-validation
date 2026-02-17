@@ -52,3 +52,6 @@ rsconnect/
 *.png
 *.parquet
 nul
+.env
+.venv
+__pycache__
