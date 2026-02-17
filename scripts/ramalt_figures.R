@@ -75,8 +75,8 @@ df_sum %>%
   filter(Dilutions == -3) %>%
   mutate(Dilutions = as.factor(Dilutions)) %>%
   ggplot(aes(Months, mean_RAF, color=`Assay`)) +
-  # geom_line(linewidth=1, alpha=0.7) +
-  geom_smooth() +
+  geom_line(linewidth=1, alpha=0.7) +
+  # geom_smooth() +
   # facet_grid(rows=vars(`Animal IDs`), cols=vars(Dilutions)) +
   facet_wrap(vars(`Animal IDs`), nrow=3) +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
@@ -89,6 +89,7 @@ df_sum %>%
   # guides(color = guide_legend(ncol = 1)) +
   theme(
     legend.position = "bottom",
+    axis.text.x = element_text(angle=90, vjust=0.5, hjust=1, size=8)
   )
 
 ggsave("rafs_sample_facet.png", path="figures/RAMALT", width=14, height=8)
@@ -111,7 +112,7 @@ df_sum %>%
   )) +
   geom_area(position="dodge", alpha=0.2) +
   scale_x_continuous(breaks=seq(0, 60, 3)) +
-  coord_transform(ylim=c(min(df_sum$mean_RAF), 0.055), expand=FALSE) +
+  coord_transform(ylim=c(min(df_sum$mean_RAF), 0.16), expand=FALSE) +
   facet_grid(vars(Dilutions)) +
   labs(
     y="Rate of Amyloid Formation (1/s)",
@@ -142,11 +143,11 @@ df_ %>%
     geom="raster",
     aes(fill=after_stat(density)),
     contour=FALSE,
-    n=250,
+    n=50,
     show.legend=FALSE
-  ) + 
+  ) +
   scale_fill_gradientn(
-    colors=c("#101010", "#202854", "#006d91", "#00ba92", "#88ffa5", "yellow")
+    colors=c("#101010", "yellow")
   ) +
   facet_grid(vars(Assay), vars(Dilutions)) +
   scale_x_continuous(breaks=seq(0, 66, 3)) +
