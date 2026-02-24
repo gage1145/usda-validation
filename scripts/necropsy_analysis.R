@@ -3,10 +3,11 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(cli)
+library(arrow)
 
-readRenviron(".Renviron")
-threshold <- as.numeric(Sys.getenv("THRESHOLD"))
-norm_point <- as.integer(Sys.getenv("NORM_POINT"))
+# readRenviron(".Renviron")
+threshold <- 5
+norm_point <- 8
 
 
 
@@ -39,22 +40,23 @@ calcs <- calculate_metrics(
   "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction", 
   threshold=threshold
 ) %>%
-  mutate(crossed = TtT != 72) %>%
-  separate_wider_delim(
-    "Sample IDs", 
-    "_", 
-    names = c("Sample IDs", "Tissue", "Side"), 
-    too_few = "align_start"
-  )
+  mutate(crossed = TtT != 72)
+  # separate_wider_delim(
+  #   "Sample IDs", 
+  #   "_", 
+  #   names = c("Sample IDs", "Tissue", "Side"), 
+  #   too_few = "align_start"
+  # )
 
 df_sum <- calcs %>%
-  group_by(`Sample IDs`, Dilutions, Assay, Tissue, Side) %>%
+  group_by(`Sample IDs`, Dilutions, Assay) %>%
   summarize(
     reps = n(),
     mean_MPR = mean(MPR),
     mean_MS  = mean(MS),
     mean_TtT = mean(TtT),
     mean_RAF = mean(RAF),
+    mean_AUC = mean(AUC),
     thres_pos = sum(crossed) > reps / 2
   )
 
