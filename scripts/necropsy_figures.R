@@ -3,15 +3,45 @@ library(ggplot2)
 library(ggridges)
 library(ggpubr)
 library(forcats)
-library(arrow)
+library(stringr)
+library(airtabler)
+source("scripts/airtable_functions.R")
 
 
 
-# Themes ------------------------------------------------------------------
+# Retrieve data from Airtable ---------------------------------------------
 
 
 
-dark_bool = FALSE
+APP <- "app7KsgYl2jhOnYg7"
+
+# Get the necessary tables
+tables <- airtable(APP, c("animals", "samples", "results", "reactions"))
+
+animals <- tables$animals$select_all()
+
+# Filter for post-mortem samples
+samples <- tables$samples$select_all(
+  filterByFormula = "{mortem} = 'post-mortem'"
+) %>%
+  rename("sample" = "id") %>%
+  select("sample", "sample_id", "animal_id")
+
+# Filter results for post-mortem samples
+results <- tables$results$select_all(
+  filterByFormula = get_formula("sample", samples$sample_id)
+)
+
+# Combine data frames
+results <- results %>%
+  mutate_at(c("sample", "reaction"), as.character) %>%
+  left_join(samples, "sample")
+
+
+
+# Theme -------------------------------------------------------------------
+
+
 
 main_theme <- theme(
   plot.title = element_text(size=24, hjust=0.5),
@@ -22,63 +52,38 @@ main_theme <- theme(
   legend.text = element_text(size=12)
 )
 
-dark_theme <- theme(
-  axis.text.x      = element_text(size=12, angle=45, face="bold",
-                                  hjust=1, vjust=1, color="white"),
-  plot.title       = element_text(hjust = 0.5, vjust=2, size = 16,
-                                  face = "bold", color="white"),
-  plot.background  = element_rect(fill="#1f1f1f", color="#1f1f1f"),
-  panel.grid       = element_line(color="#2f2f2f"),
-  axis.text.y      = element_text(size = 12, color="white"),
-  axis.title.y     = element_text(size = 14, color="white"),
-  axis.title.x     = element_text(size = 14, color="white"),
-  strip.background = element_rect(fill="transparent", color="white"),
-  strip.text       = element_text(size=10, face="bold", color="white"),
-  legend.text      = element_text(size=10, color="white")
-)
+
+
+# Format the data ---------------------------------------------------------
 
 
 
-# Load the data -----------------------------------------------------------
-
-
-
-# df_ <- read.csv("data/necropsy/calcs.csv", check.names = FALSE) %>%
-df_ <- read_parquet("data/necropsy/calcs.parquet") %>%  
-  filter(!(`Sample IDs` %in% c("N", "P"))) %>%
-  # na.omit() %>%
+df_ <- results %>%
   mutate(
-    Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC")),
-  ) %>%
-  mutate_at("Dilutions", as.factor)
+    sample_id = as.factor(sample_id),
+    animal_id = as.factor(as.character(animal_id)),
+    assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC")),
+    sample_type = as.factor(as.character(sample_type)),
+    dilution = factor(
+      dilution, 
+      levels=c(-2, -3, -4), 
+      labels=c("10^{-2}", "10^{-3}", "10^{-4}")
+    )
+  )
 
 df_sum <- df_ %>%
-  group_by(`Sample IDs`, Dilutions, Assay, Tissue, Side) %>%
+  group_by(sample_id, animal_id, dilution, assay, sample_type) %>%
   summarize(
-    median_RAF = median(RAF)
-  ) %>%
-  mutate(
-    Dilutions = factor(
-      Dilutions, 
-      levels=c(-2, -3, -4), 
-      labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
+    median_raf = median(raf)
   )
 
 df_sum_sum <- df_ %>%
-  group_by(Tissue, Assay, Dilutions) %>%
+  group_by(sample_type, assay, dilution) %>%
   summarize(
-    mean_RAF = mean(RAF),
-    sd_RAF = sd(RAF),
-    max_RAF = max(RAF),
-    min_RAF = min(RAF)
-  )
-
-# results <- read.csv("data/necropsy/summary.csv", check.names = FALSE) %>%
-results <- read_parquet("data/necropsy/summary.parquet") %>%
-  na.omit() %>%
-  mutate_at("Dilutions", as.factor) %>%
-  mutate(
-    Assay = factor(Assay, level=c("RT-QuIC", "Nano-QuIC"))
+    mean_raf = mean(raf),
+    sd_raf = sd(raf),
+    max_raf = max(raf),
+    min_raf = min(raf)
   )
 
 
@@ -88,16 +93,10 @@ results <- read_parquet("data/necropsy/summary.parquet") %>%
 
 
 df_ %>%
-  mutate(
-    Dilutions = factor(
-      Dilutions, 
-      levels=c(-2, -3, -4), 
-      labels=c("10^{-2}", "10^{-3}", "10^{-4}"))
-  ) %>%
-  ggplot(aes(fct_inorder(`Sample IDs`), RAF, fill = Assay)) +
-  geom_line(aes(y=median_RAF, color=Assay, group=Assay), data=df_sum, linewidth=1) +
-  geom_boxplot(outliers = FALSE, color=ifelse(dark_bool, "darkgrey", "black"), linewidth=0.25) +
-  facet_grid(vars(fct_rev(Dilutions)), vars(Tissue), space = "free", labeller=label_parsed) +
+  ggplot(aes(fct_inorder(animal_id), raf, fill = assay)) +
+  geom_line(aes(y=median_raf, color=assay, group=assay), data=df_sum, linewidth=1) +
+  geom_boxplot(outliers = FALSE, linewidth=0.25) +
+  facet_grid(vars(fct_rev(dilution)), vars(sample_type), space = "free", labeller=label_parsed) +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
   scale_y_continuous(sec.axis = sec_axis(~ ., name = "Dilution Factor", breaks = NULL)) +
@@ -105,7 +104,7 @@ df_ %>%
     title="Comparing Assay Kinetics between Tissues",
     y="Rate of Amyloid Formation (1/s)"
   ) +
-  {if (dark_bool) theme_transparent() + dark_theme else main_theme} +
+  main_theme +
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
@@ -113,10 +112,7 @@ df_ %>%
     legend.title = element_blank(),
     legend.background = element_blank()
   )
-ggsave(
-  ifelse(dark_bool, "dark_RAFs.png", "light_RAFs.png"), 
-  path="figures/necropsy", width=12, height=6
-)
+ggsave("RAFs.png", path="figures/necropsy", width=12, height=6)
 
 
 
@@ -125,16 +121,15 @@ ggsave(
 
 
 df_ %>%
-  filter(TtT != 72) %>%
-  ggplot(aes(RAF, fct_rev(Dilutions), fill = Assay)) +
+  filter(ttt != 72) %>%
+  ggplot(aes(raf, fct_rev(dilution), fill = assay)) +
   geom_density_ridges(
     scale=4, 
     rel_min_height=0.001, 
     panel_scaling=FALSE, 
-    alpha=0.6, 
-    color=ifelse(dark_bool, "darkgrey", "black")
+    alpha=0.6
   ) +
-  facet_grid(vars(Tissue), scale = "free") +
+  facet_grid(vars(sample_type), scale = "free") +
   scale_color_manual(values=c("darkslateblue", "darkorange")) +
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
   scale_y_discrete(expand=c(0.2, 0)) +
@@ -143,7 +138,7 @@ df_ %>%
     x="Rate of Amyloid Formation (1/h)",
     y="Log Dilution Factors"
   ) +
-  {if (dark_bool) dark_theme else main_theme} +
+  main_theme +
   theme(
     axis.text.y = element_text(size=16),
     legend.position.inside = TRUE,
@@ -158,7 +153,7 @@ df_ %>%
     panel.border = element_blank()
   )
 ggsave(
-  ifelse(dark_bool, "dark_histograms.png", "light_histograms.png"), 
+  "histograms.png", 
   path="figures/necropsy", width=16, height=8
 )
 
@@ -170,15 +165,15 @@ ggsave(
 
 df_sum_sum %>%
   ggplot(aes(
-    Dilutions, 
-    mean_RAF,
-    ymax=mean_RAF + sd_RAF,
-    ymin=mean_RAF - sd_RAF,
-    fill=Assay
+    dilution, 
+    mean_raf,
+    ymax=mean_raf + sd_raf,
+    ymin=mean_raf - sd_raf,
+    fill=assay
   )) +
   geom_col(position="dodge", color="black") +
   geom_errorbar(position=position_dodge(0.9), width=0.4) +
-  facet_grid(~Tissue, scales="free_x", space="free_x") +
+  facet_grid(~sample_type, scales="free_x", space="free_x") +
   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
   scale_y_continuous(breaks=seq(0, 0.2, 0.02)) +
   labs(
@@ -188,7 +183,6 @@ df_sum_sum %>%
   ) +
   main_theme +
   theme(
-    # axis.title.x = element_blank(),
     legend.position = c(0.9, 0.9),
     legend.background = element_blank(),
     legend.title = element_blank()
