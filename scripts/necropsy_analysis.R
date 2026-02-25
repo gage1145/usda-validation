@@ -5,11 +5,10 @@ library(stringr)
 library(cli)
 library(arrow)
 
-# readRenviron(".Renviron")
+
+
 threshold <- 5
 norm_point <- 8
-
-
 
 files <- list.files("raw/necropsy", ".xlsx", full.names = TRUE)
 
@@ -41,12 +40,6 @@ calcs <- calculate_metrics(
   threshold=threshold
 ) %>%
   mutate(crossed = TtT != 72)
-  # separate_wider_delim(
-  #   "Sample IDs", 
-  #   "_", 
-  #   names = c("Sample IDs", "Tissue", "Side"), 
-  #   too_few = "align_start"
-  # )
 
 df_sum <- calcs %>%
   group_by(`Sample IDs`, Dilutions, Assay) %>%
