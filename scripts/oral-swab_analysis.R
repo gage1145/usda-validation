@@ -3,26 +3,13 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(cli)
-
-readRenviron(".Renviron")
-
-# I am using a threshold of 4.
-threshold <- as.numeric(Sys.getenv("THRESHOLD"))
-
-# I am using a normalization cycle of 8.
-norm_point <- as.integer(Sys.getenv("NORM_POINT"))
+library(arrow)
 
 
 
-# Metadata key for linking swabs to animals and timepoints.
-key <- read.csv("data/oral-swabs/meta.csv", check.names = FALSE) %>%
-  select("Sample IDs", "Animal IDs", "Months") %>%
-  mutate(
-    Months = Months %>%
-      str_remove(" ") %>%
-      str_remove("MPI") %>%
-      as.integer()
-  )
+threshold <- 5
+norm_point <- 8
+
 
 get_raw <- function(file) {
   assay <- str_split_i(file, "_", 5) %>%
@@ -35,13 +22,10 @@ get_raw <- function(file) {
   file %>%
     get_quic(norm_point=norm_point) %>%
     mutate(
-      Dilutions = -log10(as.numeric(Dilutions)),
-      Assay = assay,
-      Reaction = rxn
+      dilution = -log10(as.numeric(Dilutions)),
+      assay = assay,
+      reaction = rxn
     ) %>%
-    left_join(key) %>%
-    select("Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
-           "Reaction", "Time", "RFU", "Norm", "Deriv") %>%
     suppressMessages() %>%
     suppressWarnings()
 }
@@ -55,10 +39,9 @@ df_ <- lapply(files, get_raw) %>%
 calculate <- function (assay) {
   # I have to do it this way to apply a different threshold to each assay.
   df_ %>%
-    filter(Assay == assay) %>%
+    filter(assay == assay) %>%
     calculate_metrics(
-      "Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
-      "Reaction",
+      "Sample IDs", "dilution", "Wells", "assay", "reaction",
       threshold=threshold
     ) %>%
     mutate(
@@ -72,7 +55,7 @@ calcs <- lapply(c("Nano-QuIC", "RT-QuIC"), calculate) %>%
 
 df_sum <- calcs %>%
   group_by(
-    `Sample IDs`, `Animal IDs`, Months, Dilutions, Assay, Reaction
+    `Sample IDs`, dilution, assay, reaction
   ) %>%
   summarize(
     reps = n(),

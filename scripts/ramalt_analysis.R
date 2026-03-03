@@ -7,18 +7,16 @@ library(arrow)
 
 
 
-readRenviron(".Renviron")
-
-threshold <- as.numeric(Sys.getenv("THRESHOLD"))
-norm_point <- as.integer(Sys.getenv("NORM_POINT"))
+threshold <- 5
+norm_point <- 8
 
 # Metadata key for linking swabs to animals and time points.
-key <- read.csv("data/RAMALT/meta.csv", check.names = FALSE) %>%
-  select("Sample IDs", "Animal IDs", "Months") %>%
-  mutate(
-    Months =  as.integer(str_remove(Months, " MPI")),
-    `Sample IDs` = as.factor(`Sample IDs`)
-  )
+# key <- read.csv("data/RAMALT/meta.csv", check.names = FALSE) %>%
+#   select("Sample IDs", "Animal IDs", "Months") %>%
+#   mutate(
+#     Months =  as.integer(str_remove(Months, " MPI")),
+#     `Sample IDs` = as.factor(`Sample IDs`)
+#   )
 
 get_raw <- function(file) {
   assay <- str_split_i(file, "_", 5) %>%
@@ -36,8 +34,8 @@ get_raw <- function(file) {
       Assay = assay,
       Reaction = rxn
     ) %>%
-    left_join(key) %>%
-    select("Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
+    # left_join(key) %>%
+    select("Sample IDs", "Dilutions", "Wells","Assay", 
            "Reaction", "Time", "RFU", "Norm", "Deriv") %>%
     suppressMessages() %>%
     suppressWarnings()
@@ -54,8 +52,7 @@ calculate <- function (assay) {
   df_ %>%
     filter(Assay == assay) %>%
     calculate_metrics(
-      "Sample IDs", "Dilutions", "Wells", "Animal IDs", "Months", "Assay", 
-      "Reaction",
+      "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction",
       threshold=threshold
     ) %>%
     mutate(
@@ -69,7 +66,7 @@ calcs <- lapply(c("Nano-QuIC", "RT-QuIC"), calculate) %>%
 
 df_sum <- calcs %>%
   group_by(
-    `Sample IDs`, `Animal IDs`, Months, Dilutions, Assay, Reaction
+    `Sample IDs`, Dilutions, Assay, Reaction
   ) %>%
   summarize(
     reps = n(),

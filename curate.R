@@ -10,12 +10,12 @@ library(arrow)
 threshold <- 5
 norm_point <- 8
 
-files <- list.files("raw/necropsy", ".xlsx", full.names = TRUE)
+files <- list.files("raw/processedSamples", ".xlsx", full.names = TRUE, recursive = TRUE)
 
 get_raw <- function(file) {
   assay <- str_split_i(file, "_", 5) %>%
     str_remove(".xlsx")
-  rxn <- str_split_i(file, "/", 3) %>%
+  rxn <- str_split_i(file, "/", str_count(file, "/") + 1) %>%
     str_remove(".xlsx")
   
   cli_alert_info(sprintf(" Reading file: %s", rxn))
@@ -23,6 +23,7 @@ get_raw <- function(file) {
   file %>%
     get_quic(norm_point=norm_point) %>%
     mutate(
+      `Sample IDs` = str_remove(`Sample IDs`, "-P"),
       Dilutions = -log10(as.numeric(Dilutions)),
       Assay = assay,
       Reaction = rxn
@@ -32,7 +33,7 @@ get_raw <- function(file) {
 }
 
 df_ <- lapply(files, get_raw) %>%
-    bind_rows()
+  bind_rows()
 
 calcs <- calculate_metrics(
   df_, 
@@ -53,7 +54,7 @@ df_sum <- calcs %>%
     thres_pos = sum(crossed) > reps / 2
   )
 
-write_parquet(df_, "data/necropsy/raw.parquet")
-write_parquet(calcs, "data/necropsy/calcs.parquet")
-write_parquet(df_sum, "data/necropsy/summary.parquet")
+write_parquet(df_, "data/processedSamples/raw.parquet")
+write_parquet(calcs, "data/processedSamples/calcs.parquet")
+write_parquet(df_sum, "data/processedSamples/summary.parquet")
 
