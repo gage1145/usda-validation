@@ -43,15 +43,15 @@ class Technician(Model):
 
 class Sample(Model):
     sample_id = F.SingleLineTextField("sample_id")
-    animal = F.LinkField("animal", Animal)
-    sample_type_id = F.LinkField("sample_type_id", SampleType)
+    animal = F.LinkField("animal", Animal, lazy=True)
+    sample_type_id = F.LinkField("sample_type_id", SampleType, lazy=True)
     sample_type = F.LookupField("sample_type")
     mortem = F.LookupField("mortem")
     concentration = F.PercentField("concentration")
     mpi = F.NumberField("mpi")
     bilateral = F.CheckboxField("bilateral")
     process_date = F.DateField("process_date")
-    technician_id = F.LinkField("technician_id", Technician)
+    technician_id = F.LinkField("technician_id", Technician, lazy=True)
     tech_name = F.LookupField("tech_name")
 
     class Meta:
@@ -63,7 +63,7 @@ class Reaction(Model):
     rxn_name = F.SingleLineTextField("rxn_name")
     assay = F.SelectField("assay")
     date = F.DateField("date")
-    technician = F.LinkField("technician", Technician)
+    technician = F.LinkField("technician", Technician, lazy=True)
     reader = F.SelectField("reader")
     temperature = F.NumberField("temperature")
 
@@ -74,8 +74,8 @@ class Reaction(Model):
 
 class SampleReaction(Model):
     junction_id = F.AutoNumberField("junction_id")
-    sample = F.LinkField("sample", Sample)
-    reaction = F.LinkField("reaction", Reaction)
+    sample = F.LinkField("sample", Sample, lazy=True)
+    reaction = F.LinkField("reaction", Reaction, lazy=True)
 
     class Meta:
         api_key = KEY
@@ -84,8 +84,8 @@ class SampleReaction(Model):
 
 class Raw(Model):
     raw_id = F.AutoNumberField("raw_id")
-    sample = F.LinkField("sample", Sample)
-    reaction = F.LinkField("reaction", Reaction)
+    sample = F.LinkField("sample", Sample, lazy=True)
+    reaction = F.LinkField("reaction", Reaction, lazy=True)
     dilution = F.NumberField("dilutions")
     well = F.SingleLineTextField("well")
     time = F.NumberField("time")
@@ -98,8 +98,8 @@ class Raw(Model):
 
 class Result(Model):
     result_id = F.AutoNumberField("result_id")
-    sample = F.LinkField("sample", Sample)
-    reaction = F.LinkField("reaction", Reaction)
+    sample = F.LinkField("sample", Sample, lazy=True)
+    reaction = F.LinkField("reaction", Reaction, lazy=True)
     dilution = F.NumberField("dilution")
     well = F.SingleLineTextField("well")
     mpr = F.NumberField("mpr")
