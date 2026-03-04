@@ -4,6 +4,10 @@ library(ggridges)
 library(ggpubr)
 library(forcats)
 library(ggridges)
+library(airtabler)
+library(janitor)
+library(psych)
+library(ggbiplot)
 
 
 
@@ -35,21 +39,77 @@ results <- tables$results$select_all(
   filterByFormula = "AND({sample_type} = 'RAMALT', OR({mpi} = '0', NOT({mpi} = BLANK())))"
 )
 
+animals <- tables$animals$select_all()
+animals <- animals %>%
+  rename("animal" = "animal_id")
+
 df_ <- results %>%
   mutate(assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC"))) %>%
   mutate_at(
     c("sample_id", "animal", "assay"),
     ~as.factor(as.character(.))
   ) %>%
-  mutate_at("mpi", as.integer)
+  mutate_at("mpi", as.integer) %>%
+  left_join(animals, by="animal") %>%
+  janitor::clean_names()
 
 df_sum <- df_ %>%
-  group_by(sample_id, animal, mpi, dilution, assay) %>%
+  group_by(sample_id, animal, mpi, dilution, assay, room_number, group, sex, genotype, inoculum, dob, dod_collection_date) %>%
   summarize(
     median_raf = median(raf),
     mean_raf = mean(raf),
     mean_mpr = mean(mpr)
   )
+
+
+
+# PCA ---------------------------------------------------------------------
+
+
+pca_data <- df_ %>%
+  mutate_at(c("animal", "assay", "room_number", "group", "sex", "genotype", "inoculum", "mpi"), as.factor) %>%
+  # mutate_if(is.character, as.factor) %>%
+  # select_if(is.numeric) %>%
+  filter(dilution == -3) %>%
+  select(-c(ttt, raf, result_id, dilution))
+
+set.seed(111)
+ind <- sample(2, nrow(pca_data), replace=T, prob=c(0.8, 0.2))
+training <- pca_data[ind==1,]
+testing <- pca_data[ind==2,]
+
+# pca <- prcomp(pca_data)
+# summary(pca)
+pairs.panels(
+  select_if(training, is.numeric),
+  gap = 0,
+  bg = c("red", "yellow", "blue", "orange", "cyan")[training$inoculum],
+  pch=21
+)
+
+pca <- prcomp(select_if(training, is.numeric),
+              center=T,
+              scale.=T)
+attributes(pca)
+print(pca)
+palet <- colorRampPalette(c("red", "blue"))(length(levels(training$mpi)))
+pairs.panels(
+  pca$x,
+  gap=0,
+  bg = palet[training$mpi],
+  pch=21
+)
+
+pca %>%
+  ggbiplot(obs.scale = 1,
+           var.scale = 1,
+           groups = training$inoculum,
+           ellipse = TRUE,
+           # circle = TRUE,
+           ellipse.prob = 0.68) +
+  scale_color_discrete(name='') +
+  theme(legend.direction = 'horizontal',
+        legend.position = 'top')
 
 
 
