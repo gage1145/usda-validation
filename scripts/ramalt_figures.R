@@ -8,6 +8,11 @@ library(airtabler)
 library(janitor)
 library(psych)
 library(ggbiplot)
+library(car)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(survival)
 
 
 
@@ -43,23 +48,105 @@ animals <- tables$animals$select_all()
 animals <- animals %>%
   rename("animal" = "animal_id")
 
+
+
+factors <- c("animal", "assay", "room_number", "group", "sex", "genotype", "inoculum", "mpi")
+
 df_ <- results %>%
-  mutate(assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC"))) %>%
   mutate_at(
     c("sample_id", "animal", "assay"),
     ~as.factor(as.character(.))
   ) %>%
-  mutate_at("mpi", as.integer) %>%
   left_join(animals, by="animal") %>%
-  janitor::clean_names()
+  mutate(assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC"))) %>%
+  janitor::clean_names() %>%
+  mutate_at("mpi", as.integer) %>%
+  mutate(positive = case_when(
+    mpi == 0                          ~ 0,  # confirmed negative
+    group == "Inoculated" & mpi > 0   ~ 1,  # confirmed positive
+    group == "Contact"    & mpi > 0   ~ NA  # unknown — model separately
+  )) %>%
+  mutate_at(factors, as.factor) %>%
+  select_if(~ is.factor(.) | is.numeric(.))
 
-df_sum <- df_ %>%
-  group_by(sample_id, animal, mpi, dilution, assay, room_number, group, sex, genotype, inoculum, dob, dod_collection_date) %>%
-  summarize(
-    median_raf = median(raf),
-    mean_raf = mean(raf),
-    mean_mpr = mean(mpr)
-  )
+
+
+# ANOVA -------------------------------------------------------------------
+
+
+
+mpr_formula <- mpr ~ assay + dilution + group + sex + genotype + mpi + (1 | room_number/animal)
+ms_formula  <- ms  ~ assay + dilution + group + sex + genotype + mpi + (1 | room_number/animal)
+auc_formula <- auc ~ assay + dilution + group + sex + genotype + mpi + (1 | room_number/animal)
+
+mpr_model <- lmer(mpr_formula, data = df_)
+ms_model  <- lmer(ms_formula,  data = df_)
+auc_model <- lmer(auc_formula, data = df_)
+
+# ANOVA-style fixed effects tables (uses Satterthwaite df by default via lmerTest)
+# anova(mpr_model)
+# anova(ms_model)
+# anova(auc_model)
+
+# Full summary including random effect variance
+# summary(mpr_model)
+# summary(ms_model)
+# summary(auc_model)
+
+# Type III SS if needed
+# Anova(mpr_model, type = "III")
+
+# Post-hoc pairwise comparisons for primary predictors
+mpr_comps <- emmeans(mpr_model, pairwise ~ assay | group | dilution)
+plot(mpr_comps)
+emmeans(mpr_model, pairwise ~ dilution)
+emmeans(mpr_model, pairwise ~ mpi)
+
+
+
+
+
+# Survival ----------------------------------------------------------------
+
+
+df_ttp <- df_ %>%
+  group_by(animal, assay, dilution, group) %>%
+  mutate(mpi = as.integer(mpi)) %>%
+  summarise(
+    ttp = min(mpi[mpr > 5], na.rm = TRUE),
+    detected = any(mpr > 5)
+  ) %>%
+  mutate(ttp = ifelse(is.infinite(ttp), NA, ttp))
+
+survdiff(Surv(ttp, detected) ~ group, data = df_ttp)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -67,11 +154,10 @@ df_sum <- df_ %>%
 
 
 pca_data <- df_ %>%
-  mutate_at(c("animal", "assay", "room_number", "group", "sex", "genotype", "inoculum", "mpi"), as.factor) %>%
   # mutate_if(is.character, as.factor) %>%
   # select_if(is.numeric) %>%
   filter(dilution == -3) %>%
-  select(-c(ttt, raf, result_id, dilution))
+  select(-c(ttt, result_id, dilution))
 
 set.seed(111)
 ind <- sample(2, nrow(pca_data), replace=T, prob=c(0.8, 0.2))
@@ -92,11 +178,11 @@ pca <- prcomp(select_if(training, is.numeric),
               scale.=T)
 attributes(pca)
 print(pca)
-palet <- colorRampPalette(c("red", "blue"))(length(levels(training$mpi)))
+palet <- colorRampPalette(c("red", "blue"))(length(levels(training$inoculum)))
 pairs.panels(
   pca$x,
   gap=0,
-  bg = palet[training$mpi],
+  bg = palet[training$inoculum],
   pch=21
 )
 
@@ -104,7 +190,7 @@ pca %>%
   ggbiplot(obs.scale = 1,
            var.scale = 1,
            groups = training$inoculum,
-           ellipse = TRUE,
+           # ellipse = TRUE,
            # circle = TRUE,
            ellipse.prob = 0.68) +
   scale_color_discrete(name='') +
