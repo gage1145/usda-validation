@@ -6,6 +6,7 @@ from datetime import datetime
 from models import *
 import pandas as pd
 from pathlib import Path
+from tqdm import tqdm
 
 
 load_dotenv()
@@ -15,11 +16,11 @@ app = "app7KsgYl2jhOnYg7"
 api = Api(KEY)
 base = api.base(app)
 
-home_dir = Path("../")
+home_dir = Path("")
 data_dir = home_dir / "data"
 raw_dir = home_dir / "raw"
 
-# Define formula functions for Airtable queries
+# Formulae
 def rxn_formula(rxn_name):
     return match({"rxn_name": rxn_name})
 
@@ -35,19 +36,18 @@ def result_formula(reaction, well):
         "well": well,
     })
 
-# Get list of reactions from raw data directory
+# Get Reaction Names
 reaction_list = list(raw_dir.rglob("*.xlsx"))
 reactions = [file.name.replace(".xlsx", "") for file in reaction_list]
 
-# Get list of reactions not already in Airtable
-new_reactions = [
-    rxn
-    for rxn in reactions
-    if not Reaction.all(formula=rxn_formula(rxn)) 
-]
+# Update Reaction Table
+airtable_reactions = Reaction.all()
+existing_rxn_names = [rxn.rxn_name for rxn in Reaction.all()]
 
-# Update Airtable with new reactions
-for rxn in new_reactions:
+for rxn in reactions:
+    if rxn in existing_rxn_names:
+        print(f"Entry already exists for rxn: {rxn}. Skipping entry.")
+        continue
 
     rxn_split = rxn.split("_")
 
@@ -63,35 +63,28 @@ for rxn in new_reactions:
 
     technician = [Technician.first(formula=tech_formula(tech_initials))]
 
-    if not Reaction.first(formula=rxn_formula(rxn)):
-        reaction = Reaction(
-            rxn_name = rxn,
-            assay = assay,
-            date = date,
-            technician = technician,
-            reader = reader,
-            temperature = 42
-        )
+    reaction = Reaction(
+        rxn_name = rxn,
+        assay = assay,
+        date = date,
+        technician = technician,
+        reader = reader,
+        temperature = 42
+    )
 
-        reaction.save()
-    else:
-        print(f"Entry already exists for rxn: {rxn}")
+    reaction.save()
 
-# Get list of result files from data directory
+# Load in Results
 result_files = list(data_dir.rglob("calcs.parquet"))
 
 df_list = []
 for file in result_files:
     df = pd.read_parquet(file)
     df_list.append(df)
-df = (
-    pd
-    .concat(df_list)
-    .rename(columns={"Sample IDs": "sample_id"})
-)
+print(f"Loaded {len(df_list)} result files.")
+df = pd.concat(df_list).rename(columns={"Sample IDs": "sample_id"})
 
-# Get list of samples and reactions from Airtable to ensure only 
-# new results are being updated.
+# Pull in Samples and Reactions from Airtable
 samples = pd.DataFrame([
     {
         "id": sample.id,
@@ -100,55 +93,100 @@ samples = pd.DataFrame([
     for sample in Sample.all()
 ])
 
-new_reactions = pd.DataFrame([
+rxns = pd.DataFrame([
     {
-        "id": reaction.id,
+        "rxn_id": reaction.id,
         "rxn_name": reaction.rxn_name
     }
-    for reaction in
-    Reaction.all(formula=match({"results": ""}))
+    for reaction in airtable_reactions
 ])
-new_reactions = new_reactions.rename(columns={'id':'rxn_id'})
 
-# Make sure only samples that are listed on Airtable are being updated.
-df_results = pd.merge(samples, df, "inner", on="sample_id")
-df_results = df_results[df_results['Reaction'].isin(new_reactions["rxn_name"])]
-df_results = df_results.rename(columns={'Reaction': 'rxn_name'})
-df_results = pd.merge(df_results, new_reactions, "inner", "rxn_name")
+# Merge Results with Sample and Reaction IDs
+df_results = pd.merge(samples, df, "outer", on="sample_id")
+df_results = df_results.rename(columns={'Reaction': 'rxn_name', "Wells": "well", "Dilutions": "dilution"})
+df_results = pd.merge(df_results, rxns, "outer", "rxn_name")
 
-# Create Result objects for each row in the results dataframe.
-results = []
-for _, row in df_results.iterrows():
+# Get Results from Airtable
+def get_results(result):
+    return {
+        "result_id": result.id,
+        "rxn_id": result.reaction[0].id,
+        "well": result.well
+    }
+all_results = Result.all(fields=["reaction", "well"])
+results = pd.DataFrame(map(get_results, all_results))
+df_results = pd.merge(df_results, results, "outer", on=["rxn_id", "well"])
+print(f"Total results to update: {len(df_results)}")
+
+# Functions for Updating the Result Table
+def get_sample(row):
     sample_id = row.get("id")
-    sample = [Sample.from_id(sample_id)]
-    if not sample[0].exists(): 
-        raise ValueError(f"No Airtable entry for sample {sample_id}.")
+    sample_name = row.get("sample_id")
+    if pd.isna(sample_id):
+        return None
+    return [Sample.from_id(sample_id)]
 
+def get_reaction(row):
     rxn_id = row.get("rxn_id")
-    reaction = [Reaction.from_id(rxn_id)]
-    if not reaction[0].exists():
-        raise ValueError(f"No reaction exists for {rxn_id}")
+    rxn_name = row.get("rxn_name")
+    if pd.isna(rxn_id):
+        return None
+    return [Reaction.from_id(rxn_id)]
 
-    dilution = row.get("Dilutions")
-    well = row.get("Wells")
-    mpr = row.get("MPR")
-    ms = row.get("MS")
-    ttt = row.get("TtT")
-    raf = row.get("RAF")
-    auc = row.get("AUC")
+def get_metrics(row):
+    return {    
+        "well": row.get("well"),
+        "dilution": row.get("dilution"),
+        "mpr": row.get("MPR"),
+        "ms": row.get("MS"),
+        "ttt": row.get("TtT"),
+        "raf": row.get("RAF"),
+        "auc": row.get("AUC")
+    }
 
-    result = Result(
-        sample = sample,
-        reaction = reaction,
-        dilution = dilution,
-        well = well,
-        mpr = mpr,
-        ms = ms,
-        ttt = ttt,
-        raf = raf,
-        auc = auc
-    )
-    results.append(result)
+def get_result(row):
+    result_id = row.get("result_id")
+    if pd.isna(result_id):
+        return None
+    return Result.from_id(result_id)
 
-# Save results to Airtable
-[result.save() for result in results]
+tqdm.pandas(desc="Updating Results")
+
+def update_result(row):
+    metrics = get_metrics(row)
+    result = get_result(row)
+    if result:
+        result.dilution = metrics.get("dilution")
+        result.mpr = metrics.get("mpr")
+        result.ms = metrics.get("ms")
+        result.ttt = metrics.get("ttt")
+        result.raf = metrics.get("raf")
+        result.auc = metrics.get("auc")
+    else:
+        sample = get_sample(row)
+        if not sample:
+            return
+
+        reaction = get_reaction(row)
+        if not reaction:
+            return
+
+        result = Result(
+            sample = sample,
+            reaction = reaction,
+            dilution = metrics.get("dilution"),
+            well = metrics.get("well"),
+            mpr = metrics.get("mpr"),
+            ms = metrics.get("ms"),
+            ttt = metrics.get("ttt"),
+            raf = metrics.get("raf"),
+            auc = metrics.get("auc")
+        )
+    return result
+
+# Generate Results to Save
+updated_results = df_results.progress_apply(update_result, axis=1)
+results_to_save = [result for result in updated_results if result]
+
+# Save Results to Airtable
+Result.batch_save(results_to_save)
