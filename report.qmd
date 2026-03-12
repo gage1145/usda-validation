@@ -1,5 +1,5 @@
 ---
-# title: "report"
+# title: "USDA Validation Report"
 # author: "Gage Rowden"
 format:
   pdf:
@@ -26,9 +26,9 @@ editor: source
 ## Necropsy
 
 
-![Rates of amyloid formation of necropsy samples. Plot is facetted by tissue type and dilution factor. Samples are denoted on the x-axis. Generally, for obex, a dilution factor of 10$^{-4}$ is considered standard. For RAMALT and RPLN, a dilution factor of 10$^{-3}$. At standard dilutions, Nano-QuIC generally out-performs RT-QuIC. Notably, for sample B-227, Nano-QuIC had positive seeding activity at 10$^{-2}$ whereas RT-QuIC did not. This animal was euthanized 3 months into the study.](figures/necropsy/light_RAFs.png)
+![Rates of amyloid formation of necropsy samples. Plot is facetted by tissue type and dilution factor. Samples are denoted on the x-axis. Generally, for obex, a dilution factor of 10$^{-4}$ is considered standard. For RAMALT and RPLN, a dilution factor of 10$^{-3}$. At standard dilutions, Nano-QuIC generally out-performs RT-QuIC. Notably, for sample B-227, Nano-QuIC had positive seeding activity at 10$^{-2}$ whereas RT-QuIC did not. This animal was euthanized 3 months into the study.](figures/necropsy/RAFs.png)
 
-![Density plots of rates of amyloid formation. For each sample type (obex, RAMALT, and RPLN), Nano-QuIC tends to have faster reaction kinetics.](figures/necropsy/light_histograms.png)
+![Density plots of rates of amyloid formation. For each sample type (obex, RAMALT, and RPLN), Nano-QuIC tends to have faster reaction kinetics.](figures/necropsy/histograms.png)
 
 ![](figures/necropsy/mean_RAF_col.png)
 
