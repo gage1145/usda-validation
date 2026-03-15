@@ -3,6 +3,9 @@ title: "USDA Validation Report"
 author: "Gage Rowden"
 format:
   pdf:
+    fig-width: 6.5
+    fig-height: 4.5
+    fig-align: center
     documentclass: report
     header-includes:
       - \usepackage{fontspec}
@@ -22,13 +25,13 @@ format:
 format-links: false
 editor: source
 ---
+## RAMALT ROC Analysis
+RAMALT biopsies taken at time zero were considered the negative control group, and those taken at time of necropsy were considered the positive control group. Three metrics, AUC, MPR, and MS were analyzed to determine the sensitivity and specificity of the two assays and dilution factors.
 
-```{r echo=FALSE, warning=FALSE, message=FALSE}
+Data is first loaded from Airtable using the airtabler API wrapper. The library can be installed with `{r} remotes::install_github("https://github.com/bergant/airtabler")`. The user must also have a personal access token with the appropriate permissions to access the data.
+```{r warning=FALSE, message=FALSE}
 library(tidyverse)
 library(airtabler)
-library(pROC)
-library(janitor)
-library(kableExtra)
 
 APP <- "app7KsgYl2jhOnYg7"
 
@@ -40,15 +43,13 @@ results <- tables$results$select_all(
 )
 
 animals <- tables$animals$select_all()
-animals <- animals %>%
-  rename("animal" = "animal_id")
+animals <- rename(animals, "animal" = "animal_id")
 ```
 
-## RAMALT ROC Analysis
-RAMALT biopsies taken at time zero were considered the negative control group, and those taken at time of necropsy were considered the positive control group. Three metrics, AUC, MPR, and MS were analyzed to determine the sensitivity and specificity of the two assays and dilution factors.
+First the data was cleaned and formatted. 
+```{r warning=FALSE, message=FALSE}
+library(janitor)
 
-First the data was cleaned and formatted.
-```{r warning=FALSE}
 df_ <- results %>%
   mutate(across(everything(), as.character)) %>%
   left_join(animals, by = "animal") %>%
@@ -70,7 +71,9 @@ df_roc <- df_ %>%
   pivot_longer(cols=c("mpr", "ms", "auc"))
 ```
 Combinations of the relevant variables (metrics, assay, dilution) were generated for making ROCs of subset data. Additionally, a couple of functions for generating the ROCs and formatting data.
-```{r}
+```{r message=FALSE}
+library(pROC)
+
 # Build all combinations of variables
 combos <- expand.grid(
   m = unique(df_roc$name),
@@ -103,8 +106,11 @@ relabel_metrics <- function(x) {
   factor(x, levels = lvls, labels = toupper(lvls))
 }
 ```
-Apply the ROC function to the subsampled datasets.
-```{r}
+### RAMALT ROC Results
+Apply the ROC function to the sub-sampled datasets.
+```{r message=FALSE}
+library(kableExtra)
+
 roc_results  <- pmap(combos, compute_roc)
 rocs         <- map(roc_results, "roc")
 coord_df     <- map(roc_results, "coords") %>% 
@@ -124,8 +130,8 @@ auc_df <- combos %>%
   arrange(desc(auc))
 kable(auc_df)
 ```
-### RAMALT ROC Results
-```{r}
+
+```{r echo=FALSE}
 coord_df %>%
   group_by(assay, dilution, metric) %>%
   arrange(sensitivity) %>%
