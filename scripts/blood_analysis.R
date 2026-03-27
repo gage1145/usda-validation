@@ -5,9 +5,8 @@ library(stringr)
 library(arrow)
 library(cli)
 
-readRenviron(".Renviron")
-threshold <- as.numeric(Sys.getenv("THRESHOLD"))
-norm_point <- as.integer(Sys.getenv("NORM_POINT"))
+threshold <- 5
+norm_point <- 8
 
 
 
@@ -69,3 +68,6 @@ write_parquet(df_, "data/blood/raw.parquet")
 write_parquet(calcs, "data/blood/calcs.parquet")
 write_parquet(df_sum, "data/blood/summary.parquet")
 
+
+
+# Blood stats ------------------------------------------------------------

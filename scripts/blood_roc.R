@@ -2,8 +2,8 @@ library(tidyverse)
 library(pROC)
 
 
-readRenviron(".Renviron")
-threshold <- as.numeric(Sys.getenv("THRESHOLD"))
+threshold <- 5
+norm_point <- 8
 
 main_theme <- theme(
   axis.title       = element_text(size=16),
@@ -55,12 +55,12 @@ for (sub_conc in sub_concs) {
           )
         
         if (nrow(sub_df) == 0) { 
-          # cli_alert_danger(sprintf("Subset %s had no data.", roc_name))
+          cli_alert_danger(sprintf("Subset %s had no data.", roc_name))
           next
         }
         
         if (length(unique(sub_df$response)) != 2) {
-          # cli_alert_danger(sprintf("Subset %s didn't have matching responses.", roc_name))
+          cli_alert_danger(sprintf("Subset %s didn't have matching responses.", roc_name))
           next
         }
         
@@ -89,6 +89,8 @@ cis <- roc_list %>%
   sapply(function(x) x$ci)
 
 good_rocs <- unique(thresholds$ind)
+
+ggroc(roc_list)
 
 aucs %>%
   filter(ind %in% good_rocs) %>%
