@@ -3,7 +3,7 @@ import os
 from pyairtable import Api
 from pyairtable.formulas import match
 from datetime import datetime
-from models import *
+from models import Technician, Sample, Reaction, Result
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
