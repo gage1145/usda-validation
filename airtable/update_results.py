@@ -121,14 +121,12 @@ print(f"Total results to update: {len(df_results)}")
 # Functions for Updating the Result Table
 def get_sample(row):
     sample_id = row.get("id")
-    sample_name = row.get("sample_id")
     if pd.isna(sample_id):
         return None
     return [Sample.from_id(sample_id)]
 
 def get_reaction(row):
     rxn_id = row.get("rxn_id")
-    rxn_name = row.get("rxn_name")
     if pd.isna(rxn_id):
         return None
     return [Reaction.from_id(rxn_id)]
