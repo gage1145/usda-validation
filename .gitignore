@@ -55,3 +55,6 @@ nul
 .env
 .venv
 __pycache__
+
+# Jupyter Notebooks
+*.ipynb
