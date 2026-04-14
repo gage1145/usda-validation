@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+import argparse
 from pyairtable import Api
 from pyairtable.formulas import match
 from datetime import datetime
@@ -7,6 +8,7 @@ from models import Technician, Sample, Reaction, Result
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
+from rich import print
 
 
 load_dotenv()
@@ -15,10 +17,16 @@ app = "app7KsgYl2jhOnYg7"
 
 api = Api(KEY)
 base = api.base(app)
+print("[bold green]Connected to Airtable Base[/bold green]: [bold blue]{base.name}[/bold blue]\n")
 
 home_dir = Path("")
 data_dir = home_dir / "data"
 raw_dir = home_dir / "raw"
+
+parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
+parser.add_argument("--only_new_reactions", action="store_true", help="Update Results table with only reactions that have no associated results.")
+parser.add_argument("--skip_reactions", action="store_true", help="Skip updating the Reactions table and only update the Results table.")
+args = parser.parse_args()
 
 # Formulae
 def rxn_formula(rxn_name):
@@ -37,32 +45,35 @@ def result_formula(reaction, well):
     })
 
 # Get Reaction Names
+def parse_reaction(file):
+    return file.name.replace(".xlsx", "")
+
 reaction_list = list(raw_dir.rglob("*.xlsx"))
-reactions = [file.name.replace(".xlsx", "") for file in reaction_list]
+reactions     = list(map(parse_reaction, reaction_list))
+airtable_reactions = Reaction.all()
+existing_rxn_names = set([rxn.rxn_name for rxn in airtable_reactions])
+rxns_no_results = set([rxn.rxn_name for rxn in airtable_reactions if len(rxn.results) == 0])
+print(f"Reactions with no results: {rxns_no_results}", sep="\n")
+
+airtable_samples = Sample.all()
 
 # Update Reaction Table
-airtable_reactions = Reaction.all()
-existing_rxn_names = [rxn.rxn_name for rxn in Reaction.all()]
+def update_reaction(rxn):
+    existing_rxn = rxn in existing_rxn_names
 
-for rxn in reactions:
-    if rxn in existing_rxn_names:
+    if existing_rxn:
         print(f"Entry already exists for rxn: {rxn}. Skipping entry.")
-        continue
-
-    rxn_split = rxn.split("_")
-
-    assay = rxn_split[rxn.count("_")]
+        return
     
-    date = rxn_split[0]
-    date = "-".join([date[:4], date[4:6], date[6:8]])
-    date = datetime.strptime(date, "%Y-%m-%d")
-
-    reader = rxn_split[1]
-
+    rxn_split     = rxn.split("_")
+    assay         = rxn_split[rxn.count("_")]
+    date_raw      = rxn_split[0]
+    date_join     = "-".join([date_raw[:4], date_raw[4:6], date_raw[6:8]])
+    date          = datetime.strptime(date_join, "%Y-%m-%d")
+    reader        = rxn_split[1]
     tech_initials = rxn_split[2]
-
-    technician = [Technician.first(formula=tech_formula(tech_initials))]
-
+    technician    = [Technician.first(formula=tech_formula(tech_initials))]
+    
     reaction = Reaction(
         rxn_name = rxn,
         assay = assay,
@@ -71,40 +82,63 @@ for rxn in reactions:
         reader = reader,
         temperature = 42
     )
-
     reaction.save()
 
-# Load in Results
-result_files = list(data_dir.rglob("calcs.parquet"))
+if not args.skip_reactions:
+    list(map(update_reaction, reactions))
+else:
+    print("Skipping updating Reactions table. Only updating Results table.\n")
 
-df_list = []
-for file in result_files:
-    df = pd.read_parquet(file)
-    df_list.append(df)
-print(f"Loaded {len(df_list)} result files.")
-df = pd.concat(df_list).rename(columns={"Sample IDs": "sample_id"})
+def load_results(reactions, only_new_reactions=False):
+    result_files = list(data_dir.rglob("calcs.parquet"))
+    df_list = list(map(pd.read_parquet, result_files))
+    df = pd.concat(df_list).rename(columns={"Sample IDs": "sample_id"})
+    print(f"Loaded {len(df)} results from parquet files.")
+    
+    if only_new_reactions:
+        def filter_new_reactions(reactions):
+            def is_new(rxn): 
+                return rxn in rxns_no_results
+            return set(filter(is_new, reactions))
+        
+        print("[bold yellow]Filtering to only reactions with no associated results...[/bold yellow]\n")
+        reactions = filter_new_reactions(reactions)
+        print(f"Found {len(reactions)} reactions with no results.\n")
+        df = df.loc[df["Reaction"].isin(reactions)]
+        print(f"Filtered to {len(df)} results with new reactions.\n")
+
+    return df
+
+# Load in Results
+df = load_results(reactions, only_new_reactions=args.only_new_reactions)
 
 # Pull in Samples and Reactions from Airtable
-samples = pd.DataFrame([
+sample_df = pd.DataFrame([
     {
         "id": sample.id,
         "sample_id": sample.sample_id
     }
-    for sample in Sample.all()
+    for sample in airtable_samples
 ])
 
-rxns = pd.DataFrame([
+rxn_df = pd.DataFrame([
     {
         "rxn_id": reaction.id,
         "rxn_name": reaction.rxn_name
     }
     for reaction in airtable_reactions
 ])
+rxn_df = rxn_df.loc[rxn_df["rxn_name"].isin(reactions)]
 
 # Merge Results with Sample and Reaction IDs
-df_results = pd.merge(samples, df, "outer", on="sample_id")
-df_results = df_results.rename(columns={'Reaction': 'rxn_name', "Wells": "well", "Dilutions": "dilution"})
-df_results = pd.merge(df_results, rxns, "outer", "rxn_name")
+df_results = df.rename(columns={'Reaction': 'rxn_name', "Wells": "well", "Dilutions": "dilution"})
+df_results = df_results.merge(rxn_df, "left", on="rxn_name")
+df_results = df_results.merge(sample_df, "left", on="sample_id")
+print(df_results)
+
+print(f"Total results to update: {len(df_results)}\n")
+
+raise Exception("Stop execution to prevent accidental updates. Remove this line to proceed with updates.")
 
 # Get Results from Airtable
 def get_results(result):
@@ -113,10 +147,11 @@ def get_results(result):
         "rxn_id": result.reaction[0].id,
         "well": result.well
     }
-all_results = Result.all(fields=["reaction", "well"])
-results = pd.DataFrame(map(get_results, all_results))
-df_results = pd.merge(df_results, results, "outer", on=["rxn_id", "well"])
+airtable_results = Result.all()
+results = pd.DataFrame(map(get_results, airtable_results))
+df_results = pd.merge(df_results, results, "left", on=["rxn_id", "well"])
 print(f"Total results to update: {len(df_results)}")
+
 
 # Functions for Updating the Result Table
 def get_sample(row):

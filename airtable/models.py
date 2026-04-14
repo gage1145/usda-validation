@@ -66,6 +66,7 @@ class Reaction(Model):
     technician = F.LinkField("technician", Technician, lazy=True)
     reader = F.SelectField("reader")
     temperature = F.NumberField("temperature")
+    results = F.LinkField("results", "Result", lazy=True)
 
     class Meta:
         api_key = KEY
