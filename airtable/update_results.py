@@ -28,6 +28,9 @@ parser.add_argument("--only_new_reactions", action="store_true", help="Update Re
 parser.add_argument("--skip_reactions", action="store_true", help="Skip updating the Reactions table and only update the Results table.")
 args = parser.parse_args()
 
+skip_reactions = args.skip_reactions
+only_new_reactions = args.only_new_reactions
+
 # Formulae
 def rxn_formula(rxn_name):
     return match({"rxn_name": rxn_name})
@@ -48,21 +51,20 @@ def result_formula(reaction, well):
 def parse_reaction(file):
     return file.name.replace(".xlsx", "")
 
-reaction_list = list(raw_dir.rglob("*.xlsx"))
-reactions     = list(map(parse_reaction, reaction_list))
+reaction_list      = list(raw_dir.rglob("*.xlsx"))
+reactions          = list(map(parse_reaction, reaction_list))
 airtable_reactions = Reaction.all()
 existing_rxn_names = set([rxn.rxn_name for rxn in airtable_reactions])
-rxns_no_results = set([rxn.rxn_name for rxn in airtable_reactions if len(rxn.results) == 0])
-print(f"Reactions with no results: {rxns_no_results}", sep="\n")
+new_reactions      = [rxn for rxn in reactions if rxn not in existing_rxn_names]
 
-airtable_samples = Sample.all()
+airtable_samples   = Sample.all()
 
 # Update Reaction Table
 def update_reaction(rxn):
     existing_rxn = rxn in existing_rxn_names
 
     if existing_rxn:
-        print(f"Entry already exists for rxn: {rxn}. Skipping entry.")
+        print(f"Entry already exists for rxn: [yellow]{rxn}[/yellow]. [red]Skipping entry.[/red]")
         return
     
     rxn_split     = rxn.split("_")
@@ -75,19 +77,24 @@ def update_reaction(rxn):
     technician    = [Technician.first(formula=tech_formula(tech_initials))]
     
     reaction = Reaction(
-        rxn_name = rxn,
-        assay = assay,
-        date = date,
-        technician = technician,
-        reader = reader,
+        rxn_name    = rxn,
+        assay       = assay,
+        date        = date,
+        technician  = technician,
+        reader      = reader,
         temperature = 42
     )
     reaction.save()
 
-if not args.skip_reactions:
+if not skip_reactions:
     list(map(update_reaction, reactions))
 else:
     print("Skipping updating Reactions table. Only updating Results table.\n")
+
+if new_reactions:
+    airtable_reactions = Reaction.all()
+
+rxns_no_results = set([rxn.rxn_name for rxn in airtable_reactions if not rxn.results])
 
 def load_results(reactions, only_new_reactions=False):
     result_files = list(data_dir.rglob("calcs.parquet"))
@@ -110,7 +117,7 @@ def load_results(reactions, only_new_reactions=False):
     return df
 
 # Load in Results
-df = load_results(reactions, only_new_reactions=args.only_new_reactions)
+df = load_results(reactions, only_new_reactions=only_new_reactions)
 
 # Pull in Samples and Reactions from Airtable
 sample_df = pd.DataFrame([
@@ -138,19 +145,18 @@ print(df_results)
 
 print(f"Total results to update: {len(df_results)}\n")
 
-raise Exception("Stop execution to prevent accidental updates. Remove this line to proceed with updates.")
-
 # Get Results from Airtable
-def get_results(result):
-    return {
-        "result_id": result.id,
-        "rxn_id": result.reaction[0].id,
-        "well": result.well
-    }
-airtable_results = Result.all()
-results = pd.DataFrame(map(get_results, airtable_results))
-df_results = pd.merge(df_results, results, "left", on=["rxn_id", "well"])
-print(f"Total results to update: {len(df_results)}")
+if not only_new_reactions:
+    def get_results(result):
+        return {
+            "result_id": result.id,
+            "rxn_id": result.reaction[0].id,
+            "well": result.well
+        }
+    airtable_results = Result.all()
+    results = pd.DataFrame(map(get_results, airtable_results))
+    df_results = pd.merge(df_results, results, "left", on=["rxn_id", "well"])
+    print(f"Total results to update: {len(df_results)}")
 
 
 # Functions for Updating the Result Table
@@ -158,13 +164,13 @@ def get_sample(row):
     sample_id = row.get("id")
     if pd.isna(sample_id):
         return None
-    return [Sample.from_id(sample_id)]
+    return [sample for sample in airtable_samples if sample_id == sample.id]
 
 def get_reaction(row):
     rxn_id = row.get("rxn_id")
     if pd.isna(rxn_id):
         return None
-    return [Reaction.from_id(rxn_id)]
+    return [rxn for rxn in airtable_reactions if rxn_id == rxn.id]
 
 def get_metrics(row):
     return {    
@@ -181,7 +187,10 @@ def get_result(row):
     result_id = row.get("result_id")
     if pd.isna(result_id):
         return None
-    return Result.from_id(result_id)
+    results = [result for result in airtable_results if result_id == result.id]
+    if len(results) != 1:
+        raise ValueError("Result query returned more than one result.")
+    return results[0]
 
 tqdm.pandas(desc="Updating Results")
 
