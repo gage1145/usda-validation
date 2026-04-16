@@ -7,6 +7,7 @@ library(pROC)
 library(DT)
 library(plotly)
 library(lubridate)
+library(stringr)
 
 
 # ---------------------------------------------------------------------------
@@ -19,11 +20,16 @@ results <- read.csv("data/results.csv", stringsAsFactors = FALSE)
 df_ <- results %>%
   select(-c(temperature, result_id, sample_type_id, concentration, inoculum)) %>%
   mutate(
-    across(c(animal_id, room_number, group, sex, genotype, sample_id, sample_type, mortem, well, reader), as.factor),
+    sample_type = ifelse(str_detect(sample_type, "nasal"), "nasal swab", sample_type),
+    sample_type = ifelse(str_detect(sample_type, "oral"), "oral swab", sample_type),
+    across(c(animal_id, room_number, group, sex, genotype, sample_id, mortem, well, reader), as.factor),
     across(matches("date|dob"), as_date),
     assay  = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
     mpi    = as.integer(mpi),
     across(any_of(c("mpr", "raf", "ttt", "ms", "auc", "dilution")), as.numeric)
+  ) %>%
+  filter(
+    !(str_detect(sample_type, "swab") & dilution < -1)
   )
 
 # ROC dataset (RAMALT only) -------------------------------------------------
@@ -81,10 +87,10 @@ auc_df <- combos_valid %>%
 
 # Explore tab helpers -------------------------------------------------------
 sample_types  <- sort(unique(df_$sample_type))
-color_choices <- c("mortem", "group", "genotype", "sex")
+color_choices <- c("mortem", "group", "genotype", "sex", "animal_id")
 color_choices <- color_choices[color_choices %in% names(df_)]
 
-metric_choices <- c("mpr", "ms", "auc", "ttt")
+metric_choices <- c("mpr", "ms", "auc", "raf", "ttt")
 metric_choices <- metric_choices[metric_choices %in% names(df_)]
 
 assay_choices <- c("Both", levels(df_$assay))
@@ -136,13 +142,34 @@ ui <- page_navbar(
     )
   ),
 
-  # -- Tab 3: Results Table -------------------------------------------------
+  # -- Tab 3: Longitudinal --------------------------------------------------
+  nav_panel(
+    "Longitudinal",
+    layout_sidebar(
+      sidebar = sidebar(
+        selectInput("long_sample_type", "Sample Type",
+                    choices = sample_types, selected = sample_types[1]),
+        selectInput("long_metric", "Metric",
+                    choices = toupper(metric_choices), selected = toupper(metric_choices[1])),
+        selectInput("long_assay", "Assay",
+                    choices = assay_choices, selected = "Both"),
+        selectInput("long_color", "Color by",
+                    choices = color_choices, selected = color_choices[1]),
+        radioButtons("long_mode", "Display",
+                     choices = c("Raw", "Cumulative"),
+                     selected = "Raw")
+      ),
+      plotlyOutput("long_plot", height = "600px")
+    )
+  ),
+
+  # -- Tab 4: Results Table -------------------------------------------------
   nav_panel(
     "Results Table",
     DTOutput("results_table")
   ),
 
-  # -- Tab 4: AUC Summary ---------------------------------------------------
+  # -- Tab 5: AUC Summary ---------------------------------------------------
   nav_panel(
     "AUC Summary",
     DTOutput("auc_table")
@@ -259,6 +286,85 @@ server <- function(input, output, session) {
         title = paste(input$exp_sample_type, "–", toupper(metric_col)),
         fill  = color_col,
         color = color_col
+      ) +
+      theme_bw(base_size = 12) +
+      main_theme +
+      theme(legend.position = "right")
+
+    ggplotly(p, tooltip = "text")
+  })
+
+  # -- Longitudinal ---------------------------------------------------------
+  output$long_plot <- renderPlotly({
+    metric_col <- tolower(input$long_metric)
+    color_col  <- input$long_color
+
+    d <- df_ %>%
+      filter(sample_type == input$long_sample_type, !is.na(mpi), !is.na(.data[[metric_col]]))
+
+    if (input$long_assay != "Both") {
+      d <- d %>% filter(assay == input$long_assay)
+    }
+
+    if (nrow(d) == 0) {
+      return(plotly_empty(type = "scatter") %>%
+               layout(title = "No data for selected filters"))
+    }
+
+    d <- d %>%
+      summarize(
+        across(all_of(metric_col), mean), 
+        .by = c(mpi, .data[[color_col]], assay, dilution)
+      ) %>%
+      arrange(mpi)
+
+    if (input$long_mode == "Raw") {
+      p <- d %>%
+        ggplot(aes(
+          x     = mpi,
+          y     = .data[[metric_col]],
+          color = .data[[color_col]],
+          fill  = .data[[color_col]],
+          group = .data[[color_col]],
+          text  = paste0(
+            "MPI: ", mpi,
+            "<br>", toupper(metric_col), ": ", round(as.numeric(.data[[metric_col]]), 3),
+            "<br>", color_col, ": ", .data[[color_col]]
+          )
+        )) +
+        geom_line() +
+        geom_point(size = 2, alpha = 0.8)
+
+    } else if (input$long_mode == "Cumulative") {
+      p <- d %>%
+        mutate(
+          cum = cumsum(.data[[metric_col]]), 
+          .by = c(.data[[color_col]], assay, dilution)
+        ) %>%
+        ggplot(aes(
+          x     = mpi,
+          y     = cum,
+          color = .data[[color_col]],
+          fill  = .data[[color_col]],
+          group = .data[[color_col]],
+          text  = paste0(
+            "MPI: ", mpi,
+            "<br>Cumlative ", .data[[metric_col]], ": ", round(as.numeric(cum), 3),
+            "<br>", color_col, ": ", .data[[color_col]]
+          )
+        )) +
+        stat_smooth() +
+        geom_point(size = 2) 
+    } else stop()
+
+    p <- p +
+      facet_grid(vars(assay), vars(dilution)) +
+      labs(
+        x     = "Months Post-Inoculation (MPI)",
+        y     = toupper(metric_col),
+        title = paste(input$long_sample_type, "–", toupper(metric_col), "over time"),
+        color = color_col,
+        fill  = NULL
       ) +
       theme_bw(base_size = 12) +
       main_theme +
