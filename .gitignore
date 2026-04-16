@@ -58,3 +58,6 @@ __pycache__
 
 # Jupyter Notebooks
 *.ipynb
+
+# Dashboard snapshot data (fetched at build time)
+dashboard/data/*.csv
