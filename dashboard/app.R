@@ -8,6 +8,7 @@ library(DT)
 library(plotly)
 library(lubridate)
 
+
 # ---------------------------------------------------------------------------
 # Load data at startup (shinylive bundles the data/ directory)
 # ---------------------------------------------------------------------------
@@ -70,7 +71,7 @@ coord_df <- lapply(roc_list, `[[`, "coords") %>%
 auc_df <- combos_valid %>%
   mutate(
     auc         = sapply(roc_list, function(r) as.numeric(auc(r$roc))),
-    specificity = 0.65,
+    specificity = 0.5,
     sensitivity = ifelse(a == "RT-QuIC", 0.15, 0.05),
     label       = paste0(a, " AUC = ", signif(auc, 3)),
     m           = relabel_metrics(m)
@@ -103,6 +104,11 @@ ui <- page_navbar(
         selectInput(
           "roc_dilution", "Dilution",
           choices  = c("All", sort(unique(coord_df$dilution))),
+          selected = "All"
+        ),
+        selectInput(
+          "roc_metric", "Metric",
+          choices  = c("All", levels(coord_df$metric)),
           selected = "All"
         )
       ),
@@ -148,31 +154,55 @@ ui <- page_navbar(
 # ---------------------------------------------------------------------------
 server <- function(input, output, session) {
 
+  main_theme <- theme(
+    axis.title = element_text(size = 20),
+    axis.text = element_text(size = 12),
+    strip.text = element_text(size = 16)
+  )
+
   # -- RAMALT ROC -----------------------------------------------------------
   output$roc_plot <- renderPlotly({
     cd <- coord_df
     ad <- auc_df
 
+    # Select the dilution factor to view
     if (input$roc_dilution != "All") {
       cd <- cd %>% filter(dilution == input$roc_dilution)
       ad <- ad %>% filter(dilution == input$roc_dilution)
     }
 
+    # Select the metric to view
+    if (input$roc_metric != "All") {
+      cd <- cd %>% filter(metric == input$roc_metric)
+      ad <- ad %>% filter(metric == input$roc_metric)
+    }
+
     p <- cd %>%
-      group_by(assay, dilution, metric) %>%
       arrange(sensitivity) %>%
-      ggplot(aes(specificity, sensitivity, color = assay,
-                 text = paste0("Assay: ", assay,
-                               "<br>Dilution: ", dilution,
-                               "<br>Spec: ", round(specificity, 3),
-                               "<br>Sens: ", round(sensitivity, 3)))) +
+      ggplot(aes(
+        specificity, sensitivity, color = assay, group = 1,
+        text = paste0(
+          "Assay: ", assay,
+          "<br>Dilution: ", dilution,
+          "<br>Spec: ", round(specificity, 3),
+          "<br>Sens: ", round(sensitivity, 3),
+          "<br>Thresh: ", round(threshold, 3)
+        )
+      )) +
+      geom_abline(slope=1, intercept=1, linetype="dashed", alpha=0.5) +
       geom_step() +
-      scale_color_manual(values = c("darkslateblue", "darkorange")) +
+      geom_text(
+        aes(x = specificity, y = sensitivity, label = label, color = assay),
+        data = ad, hjust = 0, size = 5,
+        show.legend = FALSE, inherit.aes = FALSE
+      ) +
+      scale_color_manual(values = c("darkorange", "darkslateblue")) +
       facet_grid(vars(dilution), vars(metric)) +
       scale_x_reverse() +
       labs(y = "Sensitivity", x = "Specificity", color = "Assay") +
       theme_bw(base_size = 13) +
-      theme(legend.position = "bottom")
+      main_theme +
+      theme(legend.position = "none")
 
     ggplotly(p, tooltip = "text") %>%
       layout(legend = list(orientation = "h", x = 0.3, y = -0.1))
@@ -201,21 +231,24 @@ server <- function(input, output, session) {
                layout(title = "No data for selected filters"))
     }
 
-    p <- ggplot(d, aes(
-      x    = assay,
-      y    = .data[[metric_col]],
-      fill = .data[[color_col]],
-      text = paste0(color_col, ": ", .data[[color_col]],
-                    "<br>", toupper(metric_col), ": ",
-                    round(as.numeric(.data[[metric_col]]), 3))
-    ))
+    p <- d %>%
+        ggplot(aes(
+        x    = assay,
+        y    = .data[[metric_col]],
+        fill = .data[[color_col]],
+        text = paste0(color_col, ": ", .data[[color_col]],
+                      "<br>", toupper(metric_col), ": ",
+                      round(as.numeric(.data[[metric_col]]), 3))
+      ))
 
     if (input$exp_plot_type == "Boxplot") {
-      p <- p + geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+      p <- p + 
+        geom_boxplot(alpha = 0.7, outlier.shape = NA, position="dodge") +
         geom_jitter(width = 0.15, alpha = 0.4, size = 1)
     } else {
-      p <- p + geom_jitter(width = 0.2, alpha = 0.7, size = 2,
-                           aes(color = .data[[color_col]]))
+      p <- p + 
+        geom_jitter(width = 0.2, alpha = 0.7, size = 2,
+                          aes(color = .data[[color_col]]))
     }
 
     p <- p +
@@ -228,6 +261,7 @@ server <- function(input, output, session) {
         color = color_col
       ) +
       theme_bw(base_size = 12) +
+      main_theme +
       theme(legend.position = "right")
 
     ggplotly(p, tooltip = "text")
