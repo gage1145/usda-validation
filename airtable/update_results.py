@@ -17,7 +17,7 @@ app = "app7KsgYl2jhOnYg7"
 
 api = Api(KEY)
 base = api.base(app)
-print("[bold green]Connected to Airtable Base[/bold green]: [bold blue]{base.name}[/bold blue]\n")
+print(f"[bold green]Connected to Airtable Base[/bold green]: [bold blue]{base.name}[/bold blue]\n")
 
 home_dir = Path("")
 data_dir = home_dir / "data"
