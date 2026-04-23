@@ -2,9 +2,9 @@ name: Deploy Shinylive Dashboard
 
 on:
   push:
-    branches: [main]
+    branches: [dashboard]
   schedule:
-    - cron: "0 6 * * *"   # daily at 06:00 UTC
+    - cron: "0 6 * * 5"   # every Friday at 06:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -26,10 +26,13 @@ jobs:
         with:
           cache-version: 1
 
+      - name: Install shinylive
+        run: Rscript -e "install.packages('shinylive')"
+
       - name: Fetch Airtable data
         env:
           AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
-        run: Rscript scripts/fetch_dashboard_data.R
+        run: Rscript dashboard/fetch_dashboard_data.R
 
       - name: Export Shinylive app
         run: Rscript -e "shinylive::export('dashboard', 'site')"
@@ -39,5 +42,5 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./site
-          publish_branch: gh-pages
+          publish_branch: dashboard
           force_orphan: true
