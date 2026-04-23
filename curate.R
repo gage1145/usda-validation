@@ -6,15 +6,28 @@ library(arrow)
 
 threshold <- 5
 norm_point <- 8
-
+only_new <- as.logical(Sys.getenv("ONLY_NEW"))
 files <- list.files("raw/processedSamples", ".xlsx", full.names = TRUE, recursive = TRUE)
 
-get_raw <- function(file) {
-  extract_file_meta <- function(x, pattern) {
-    pattern_count <- str_count(x, pattern)
-    str_split_i(x, pattern, pattern_count + 1) %>%
-      str_remove("\\.[[:alpha:]]+$") # Remove file extension.
+extract_file_meta <- function(x, pattern) {
+  pattern_count <- str_count(x, pattern)
+  str_split_i(x, pattern, pattern_count + 1) %>%
+    str_remove("\\.[[:alpha:]]+$") # Remove file extension.
+}
+
+if (only_new) {
+  existing_files <- list.files("data/processedSamples", pattern = "calcs.parquet$", full.names = TRUE, recursive = TRUE)
+
+  if (length(existing_files != 0)) {
+    existing_data <- map_dfr(existing_files, read_parquet)$Reaction
+    rxns <- sapply(files, function(x) extract_file_meta(x, "/"))
+    files <- files[!(rxns %in% existing_data)]
   }
+}
+
+if (length(files) == 0) stop("No new files to update")
+
+get_raw <- function(file) {
   rxn <- extract_file_meta(file, "/")
   assay <- extract_file_meta(rxn, "_")
 
