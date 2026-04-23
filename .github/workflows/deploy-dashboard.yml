@@ -38,7 +38,7 @@ jobs:
       - name: Fetch Airtable data
         env:
           AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
-        run: Rscript dashboard/fetch_dashboard_data.R
+        run: Rscript scripts/fetch_dashboard_data.R
 
       - name: Export Shinylive app
         run: Rscript -e "shinylive::export('dashboard', 'site')"
