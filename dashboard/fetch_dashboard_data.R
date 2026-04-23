@@ -65,6 +65,5 @@ df_joined <- animals %>%
 # Write the data to a CSV file -------------------------------------------
 
 
-dir.create("dashboard/data", recursive = TRUE, showWarnings = FALSE)
 write.csv(df_joined, "dashboard/data/results.csv", row.names = FALSE)
 message("Wrote dashboard/data/results.csv (", nrow(results), " rows)")
