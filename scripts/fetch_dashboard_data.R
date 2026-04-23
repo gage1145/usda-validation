@@ -5,6 +5,7 @@ library(janitor)
 library(stringr)
 
 APP <- "app7KsgYl2jhOnYg7"
+KEY <- Sys.getenv("AIRTABLE_API_KEY")
 
 tables  <- airtable(APP, c("animals", "sample-types", "samples", "reactions", "results"))
 
