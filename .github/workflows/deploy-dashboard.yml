@@ -22,18 +22,17 @@ jobs:
           r-version: "4.5"
           use-public-rspm: true
 
-      - name: Install GitHub-only packages
+      - name: Cache renv packages
+        uses: actions/cache@v4
+        with:
+          path: renv/library
+          key: ${{ runner.os }}-renv-${{ hashFiles('renv.lock') }}
+          restore-keys: ${{ runner.os }}-renv-
+
+      - name: Restore renv library
         env:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          install.packages('remotes')
-          remotes::install_github('bergant/airtabler')
-          remotes::install_github('gage1145/quicR@v3.0.4')
-        shell: Rscript {0}
-
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          cache-version: 1
+        run: Rscript -e "renv::restore()"
 
       - name: Install shinylive
         run: Rscript -e "install.packages('shinylive')"
