@@ -23,6 +23,8 @@ jobs:
           use-public-rspm: true
 
       - name: Install GitHub-only packages
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           install.packages('remotes')
           remotes::install_github('bergant/airtabler')
