@@ -22,20 +22,18 @@ jobs:
           r-version: "4.5"
           use-public-rspm: true
 
-      - name: Cache renv packages
-        uses: actions/cache@v4
-        with:
-          path: renv/library
-          key: ${{ runner.os }}-renv-${{ hashFiles('renv.lock') }}
-          restore-keys: ${{ runner.os }}-renv-
-
-      - name: Restore renv library
+      - name: Install dependencies
         env:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-        run: Rscript -e "renv::restore()"
-
-      - name: Install shinylive
-        run: Rscript -e "install.packages('shinylive')"
+        run: |                                                                                                                          
+          install.packages(c(                                                                                                           
+            'remotes',                                                                                                                  
+            'dplyr', 'tidyr', 'janitor', 'stringr',                                                                                     
+            'shiny', 'bslib', 'ggplot2', 'pROC',                                                                                        
+            'DT', 'plotly', 'lubridate', 'shinylive'                                                                                    
+          ))                                                                                                                            
+          remotes::install_github('bergant/airtabler')                                                                                  
+        shell: Rscript {0}  
 
       - name: Fetch Airtable data
         env:
