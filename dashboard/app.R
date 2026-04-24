@@ -105,18 +105,6 @@ ui <- page_navbar(
       ),
       plotlyOutput("long_plot", height = "600px")
     )
-  ),
-
-  # -- Tab 4: Results Table -------------------------------------------------
-  nav_panel(
-    "Results Table",
-    DTOutput("results_table")
-  ),
-
-  # -- Tab 5: AUC Summary ---------------------------------------------------
-  nav_panel(
-    "AUC Summary",
-    DTOutput("auc_table")
   )
 )
 
@@ -321,27 +309,6 @@ server <- function(input, output, session) {
       theme(legend.position = "right")
 
     ggplotly(p, tooltip = "text")
-  })
-
-  # -- Results Table --------------------------------------------------------
-  output$results_table <- renderDT({
-    datatable(
-      results,
-      filter    = "top",
-      rownames  = FALSE,
-      options   = list(pageLength = 25, scrollX = TRUE)
-    )
-  })
-
-  # -- AUC Summary ----------------------------------------------------------
-  output$auc_table <- renderDT({
-    datatable(
-      auc_df %>% select(metric, assay, dilution, auc) %>%
-        mutate(auc = round(auc, 4)),
-      filter   = "top",
-      rownames = FALSE,
-      options  = list(pageLength = 25, order = list(list(3, "desc")))
-    )
   })
 }
 
