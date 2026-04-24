@@ -3,7 +3,6 @@ library(bslib)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(pROC)
 library(DT)
 library(plotly)
 library(lubridate)
@@ -11,79 +10,19 @@ library(stringr)
 
 
 # ---------------------------------------------------------------------------
-# Load data at startup (shinylive bundles the data/ directory)
+# Load precomputed data
 # ---------------------------------------------------------------------------
-# animals <- read.csv("data/animals.csv", stringsAsFactors = FALSE)
-results <- read.csv("data/results.csv", stringsAsFactors = FALSE)
-
-# Merge and type-cast -------------------------------------------------------
-df_ <- results %>%
-  select(-c(temperature, result_id, sample_type_id, concentration, inoculum)) %>%
+results  <- read.csv("data/results.csv",       stringsAsFactors = FALSE)
+df_      <- read.csv("data/results_clean.csv", stringsAsFactors = FALSE) %>%
   mutate(
-    sample_type = ifelse(str_detect(sample_type, "nasal"), "nasal swab", sample_type),
-    sample_type = ifelse(str_detect(sample_type, "oral"), "oral swab", sample_type),
-    across(c(animal_id, room_number, group, sex, genotype, sample_id, mortem, well, reader), as.factor),
-    across(matches("date|dob"), as_date),
-    assay  = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
-    mpi    = as.integer(mpi),
-    across(any_of(c("mpr", "raf", "ttt", "ms", "auc", "dilution")), as.numeric)
-  ) %>%
-  filter(
-    !(str_detect(sample_type, "swab") & dilution < -1)
+    assay = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
+    mpi   = as.integer(mpi),
+    across(matches("date|dob"), as_date)
   )
-
-# ROC dataset (RAMALT only) -------------------------------------------------
-df_roc <- df_ %>%
-  filter(sample_type == "RAMALT") %>%
-  filter(mpi == 0 | mortem == "post-mortem") %>%
-  mutate(positive = as.integer(mortem == "post-mortem")) %>%
-  pivot_longer(cols = any_of(c("mpr", "ms", "auc")), names_to = "name", values_to = "value")
-
-relabel_metrics <- function(x) {
-  lvls <- sort(unique(x))
-  factor(x, levels = lvls, labels = toupper(lvls))
-}
-
-# Compute ROC curves --------------------------------------------------------
-compute_roc <- function(m, a, d) {
-  sub_df <- df_roc %>% filter(name == m, assay == a, dilution == d)
-  if (nrow(sub_df) < 2 || length(unique(sub_df$positive)) < 2) return(NULL)
-  sub_roc <- tryCatch(
-    roc(sub_df, response = "positive", predictor = "value", quiet = TRUE),
-    error = function(e) NULL
-  )
-  if (is.null(sub_roc)) return(NULL)
-  coord_df <- coords(sub_roc) %>%
-    mutate(metric = m, assay = a, dilution = d)
-  list(roc = sub_roc, coords = coord_df)
-}
-
-combos <- expand.grid(
-  m = unique(df_roc$name),
-  a = levels(df_roc$assay),
-  d = unique(df_roc$dilution),
-  stringsAsFactors = FALSE
-)
-
-roc_list    <- Map(compute_roc, combos$m, combos$a, combos$d)
-valid       <- !sapply(roc_list, is.null)
-roc_list    <- roc_list[valid]
-combos_valid <- combos[valid, ]
-
-coord_df <- lapply(roc_list, `[[`, "coords") %>%
-  bind_rows() %>%
-  mutate(metric = relabel_metrics(metric))
-
-auc_df <- combos_valid %>%
-  mutate(
-    auc         = sapply(roc_list, function(r) as.numeric(auc(r$roc))),
-    specificity = 0.5,
-    sensitivity = ifelse(a == "RT-QuIC", 0.15, 0.05),
-    label       = paste0(a, " AUC = ", signif(auc, 3)),
-    m           = relabel_metrics(m)
-  ) %>%
-  rename(assay = a, dilution = d, metric = m) %>%
-  arrange(desc(auc))
+coord_df <- read.csv("data/roc_coords.csv", stringsAsFactors = FALSE) %>%
+  mutate(metric = factor(metric, levels = sort(unique(metric))))
+auc_df   <- read.csv("data/roc_auc.csv",    stringsAsFactors = FALSE) %>%
+  mutate(metric = factor(metric, levels = levels(coord_df$metric)))
 
 # Explore tab helpers -------------------------------------------------------
 sample_types  <- sort(unique(df_$sample_type))
@@ -129,14 +68,19 @@ ui <- page_navbar(
       sidebar = sidebar(
         selectInput("exp_sample_type", "Sample Type",
                     choices = sample_types, selected = sample_types[1]),
-        selectInput("exp_metric", "Metric",
+        selectInput("exp_metric_x", "X-Metric",
                     choices = toupper(metric_choices), selected = toupper(metric_choices[1])),
+        selectInput("exp_metric_y", "Y-Metric",
+                    choices = toupper(metric_choices), selected = toupper(metric_choices[3])),
         selectInput("exp_assay", "Assay",
                     choices = assay_choices, selected = "Both"),
         selectInput("exp_color", "Color by",
                     choices = color_choices, selected = color_choices[1]),
         radioButtons("exp_plot_type", "Plot type",
-                     choices = c("Boxplot", "Jitter"), selected = "Boxplot")
+                     choices = c("Boxplot", "Jitter"), selected = "Boxplot"),
+        sliderInput("exp_time_slider", "Months",
+                    min = min(df_$mpi, na.rm = TRUE), max = max(df_$mpi, na.rm = TRUE), 
+                    value = min(df_$mpi, na.rm = TRUE), step = 1, animate = animationOptions(50, FALSE))
       ),
       plotlyOutput("explore_plot", height = "600px")
     )
@@ -192,13 +136,11 @@ server <- function(input, output, session) {
     cd <- coord_df
     ad <- auc_df
 
-    # Select the dilution factor to view
     if (input$roc_dilution != "All") {
       cd <- cd %>% filter(dilution == input$roc_dilution)
       ad <- ad %>% filter(dilution == input$roc_dilution)
     }
 
-    # Select the metric to view
     if (input$roc_metric != "All") {
       cd <- cd %>% filter(metric == input$roc_metric)
       ad <- ad %>% filter(metric == input$roc_metric)
@@ -237,10 +179,16 @@ server <- function(input, output, session) {
 
   # -- Explore --------------------------------------------------------------
   explore_data <- reactive({
-    metric_col <- tolower(input$exp_metric)
+    input_mpi <- input$exp_time_slider
+    metric_col_x <- tolower(input$exp_metric_x)
+    metric_col_y <- tolower(input$exp_metric_y)
     d <- df_ %>%
-      filter(sample_type == input$exp_sample_type) %>%
-      filter(!is.na(.data[[metric_col]]))
+      filter(
+        sample_type == input$exp_sample_type,
+        mpi == input_mpi,
+        !is.na(.data[[metric_col_x]]),
+        !is.na(.data[[metric_col_y]])
+      )
 
     if (input$exp_assay != "Both") {
       d <- d %>% filter(assay == input$exp_assay)
@@ -249,44 +197,46 @@ server <- function(input, output, session) {
   })
 
   output$explore_plot <- renderPlotly({
-    metric_col <- tolower(input$exp_metric)
+    metric_col_x <- tolower(input$exp_metric_x)
+    metric_col_y <- tolower(input$exp_metric_y)
     color_col  <- input$exp_color
     d <- explore_data()
 
     if (nrow(d) == 0) {
       return(plotly_empty(type = "scatter") %>%
-               layout(title = "No data for selected filters"))
+        layout(title = "No data for selected filters"))
     }
+
+    min_x <- min(df_[[metric_col_x]], na.rm=TRUE)
+    max_x <- max(df_[[metric_col_x]], na.rm=TRUE)
+    min_y <- min(df_[[metric_col_y]], na.rm=TRUE)
+    max_y <- max(df_[[metric_col_y]], na.rm=TRUE)
 
     p <- d %>%
-        ggplot(aes(
-        x    = assay,
-        y    = .data[[metric_col]],
-        fill = .data[[color_col]],
-        text = paste0(color_col, ": ", .data[[color_col]],
-                      "<br>", toupper(metric_col), ": ",
-                      round(as.numeric(.data[[metric_col]]), 3))
-      ))
-
-    if (input$exp_plot_type == "Boxplot") {
-      p <- p + 
-        geom_boxplot(alpha = 0.7, outlier.shape = NA, position="dodge") +
-        geom_jitter(width = 0.15, alpha = 0.4, size = 1)
-    } else {
-      p <- p + 
-        geom_jitter(width = 0.2, alpha = 0.7, size = 2,
-                          aes(color = .data[[color_col]]))
-    }
-
-    p <- p +
-      facet_wrap(vars(dilution)) +
+      ggplot(aes(
+      x     = .data[[metric_col_x]],
+      y     = .data[[metric_col_y]],
+      color = .data[[color_col]],
+      fill  = .data[[color_col]],
+      text  = paste0(
+        color_col, ": ", .data[[color_col]],
+        "<br>", toupper(metric_col_x), ": ",
+        round(as.numeric(.data[[metric_col_x]]), 3),
+        "<br>", toupper(metric_col_y), ": ",
+        round(as.numeric(.data[[metric_col_y]]), 3)
+      )
+    )) +
+      geom_point(alpha = 0.7, size = 2) +
+      facet_grid(vars(dilution), vars(assay), scales = "fixed") +
       labs(
-        x     = "Assay",
-        y     = toupper(metric_col),
-        title = paste(input$exp_sample_type, "–", toupper(metric_col)),
+        x     = toupper(metric_col_x),
+        y     = toupper(metric_col_y),
+        title = paste(input$exp_sample_type, "-", toupper(metric_col_x), "vs", toupper(metric_col_y)),
         fill  = color_col,
         color = color_col
       ) +
+      scale_x_log10(limits = c(min_x, max_x)) +
+      scale_y_log10(limits = c(min_y, max_y)) +
       theme_bw(base_size = 12) +
       main_theme +
       theme(legend.position = "right")
@@ -313,7 +263,7 @@ server <- function(input, output, session) {
 
     d <- d %>%
       summarize(
-        across(all_of(metric_col), mean), 
+        across(all_of(metric_col), mean),
         .by = c(mpi, .data[[color_col]], assay, dilution)
       ) %>%
       arrange(mpi)
@@ -338,7 +288,7 @@ server <- function(input, output, session) {
     } else if (input$long_mode == "Cumulative") {
       p <- d %>%
         mutate(
-          cum = cumsum(.data[[metric_col]]), 
+          cum = cumsum(.data[[metric_col]]),
           .by = c(.data[[color_col]], assay, dilution)
         ) %>%
         ggplot(aes(
@@ -349,12 +299,12 @@ server <- function(input, output, session) {
           group = .data[[color_col]],
           text  = paste0(
             "MPI: ", mpi,
-            "<br>Cumlative ", .data[[metric_col]], ": ", round(as.numeric(cum), 3),
+            "<br>Cumulative ", .data[[metric_col]], ": ", round(as.numeric(cum), 3),
             "<br>", color_col, ": ", .data[[color_col]]
           )
         )) +
         stat_smooth() +
-        geom_point(size = 2) 
+        geom_point(size = 2)
     } else stop()
 
     p <- p +
@@ -362,7 +312,7 @@ server <- function(input, output, session) {
       labs(
         x     = "Months Post-Inoculation (MPI)",
         y     = toupper(metric_col),
-        title = paste(input$long_sample_type, "–", toupper(metric_col), "over time"),
+        title = paste(input$long_sample_type, "-", toupper(metric_col), "over time"),
         color = color_col,
         fill  = NULL
       ) +
