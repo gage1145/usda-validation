@@ -126,7 +126,3 @@ coord_df %>%
   )
 
 ggsave("ramalt_roc.png", path="figures/RAMALT", width=16, height=10)
-
-
-
-
