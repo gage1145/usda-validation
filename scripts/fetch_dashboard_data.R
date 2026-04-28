@@ -5,7 +5,7 @@ library(janitor)
 library(stringr)
 library(lubridate)
 library(pROC)
-library(zoo)
+# library(zoo)
 
 APP <- "app7KsgYl2jhOnYg7"
 KEY <- Sys.getenv("AIRTABLE_API_KEY")
@@ -87,16 +87,16 @@ df_ <- df_joined %>%
     !(str_detect(sample_type, "swab") & dilution < -1)
   )
 
-df_lerp <- df_ %>%
-  filter(!is.na(mpi)) %>%
-  group_by(animal_id, sample_type, dilution, assay, group, room_number, sex, genotype, dob, dod_collection_date, species, mortem) %>%
-  complete(mpi = min(mpi, na.rm = TRUE):max(mpi, na.rm = TRUE)) %>%
-  mutate(
-    interpolated_value = is.na(mpr),
-    across(c(mpr, ms, auc, ttt, auc), na.spline)
-  )
+# df_lerp <- df_ %>%
+#   filter(!is.na(mpi)) %>%
+#   group_by(animal_id, sample_type, dilution, assay, group, room_number, sex, genotype, dob, dod_collection_date, species, mortem) %>%
+#   complete(mpi = min(mpi, na.rm = TRUE):max(mpi, na.rm = TRUE)) %>%
+#   mutate(
+#     interpolated_value = is.na(mpr),
+#     across(c(mpr, ms, auc, ttt, auc), na.spline)
+#   )
 
-write.csv(df_lerp, "dashboard/data/results_clean.csv", row.names = FALSE)
+write.csv(df_, "dashboard/data/results_clean.csv", row.names = FALSE)
 message("Wrote dashboard/data/results_clean.csv")
 
 
