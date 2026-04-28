@@ -1,28 +1,25 @@
 library(shiny)
 library(bslib)
-library(dplyr)
-library(tidyr)
 library(ggplot2)
-library(DT)
 library(plotly)
-library(lubridate)
-library(stringr)
-
 
 # ---------------------------------------------------------------------------
 # Load precomputed data
 # ---------------------------------------------------------------------------
-results  <- read.csv("data/results.csv",       stringsAsFactors = FALSE)
-df_      <- read.csv("data/results_clean.csv", stringsAsFactors = FALSE) %>%
-  mutate(
-    assay = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
-    mpi   = as.integer(mpi),
-    across(matches("date|dob"), as_date)
-  )
-coord_df <- read.csv("data/roc_coords.csv", stringsAsFactors = FALSE) %>%
-  mutate(metric = factor(metric, levels = sort(unique(metric))))
-auc_df   <- read.csv("data/roc_auc.csv",    stringsAsFactors = FALSE) %>%
-  mutate(metric = factor(metric, levels = levels(coord_df$metric)))
+results  <- read.csv("data/results.csv", stringsAsFactors = FALSE)
+
+df_ <- read.csv("data/results_clean.csv", stringsAsFactors = FALSE)
+df_$assay <- factor(df_$assay, levels = c("RT-QuIC", "Nano-QuIC"))
+df_$mpi   <- as.integer(df_$mpi)
+for (col in grep("date|dob", names(df_), value = TRUE)) {
+  df_[[col]] <- as.Date(df_[[col]])
+}
+
+coord_df <- read.csv("data/roc_coords.csv", stringsAsFactors = FALSE)
+coord_df$metric <- factor(coord_df$metric, levels = sort(unique(coord_df$metric)))
+
+auc_df <- read.csv("data/roc_auc.csv", stringsAsFactors = FALSE)
+auc_df$metric <- factor(auc_df$metric, levels = levels(coord_df$metric))
 
 # Explore tab helpers -------------------------------------------------------
 sample_types  <- sort(unique(df_$sample_type))
@@ -79,7 +76,7 @@ ui <- page_navbar(
         radioButtons("exp_plot_type", "Plot type",
                      choices = c("Boxplot", "Jitter"), selected = "Boxplot"),
         sliderInput("exp_time_slider", "Months",
-                    min = min(df_$mpi, na.rm = TRUE), max = max(df_$mpi, na.rm = TRUE), 
+                    min = min(df_$mpi, na.rm = TRUE), max = max(df_$mpi, na.rm = TRUE),
                     value = min(df_$mpi, na.rm = TRUE), step = 1, animate = animationOptions(50, FALSE))
       ),
       plotlyOutput("explore_plot", height = "600px")
@@ -125,18 +122,18 @@ server <- function(input, output, session) {
     ad <- auc_df
 
     if (input$roc_dilution != "All") {
-      cd <- cd %>% filter(dilution == input$roc_dilution)
-      ad <- ad %>% filter(dilution == input$roc_dilution)
+      cd <- cd[cd$dilution == input$roc_dilution, ]
+      ad <- ad[ad$dilution == input$roc_dilution, ]
     }
 
     if (input$roc_metric != "All") {
-      cd <- cd %>% filter(metric == input$roc_metric)
-      ad <- ad %>% filter(metric == input$roc_metric)
+      cd <- cd[cd$metric == input$roc_metric, ]
+      ad <- ad[ad$metric == input$roc_metric, ]
     }
 
-    p <- cd %>%
-      arrange(sensitivity) %>%
-      ggplot(aes(
+    cd <- cd[order(cd$sensitivity), ]
+
+    p <- ggplot(cd, aes(
         specificity, sensitivity, color = assay, group = 1,
         text = paste0(
           "Assay: ", assay,
@@ -146,7 +143,7 @@ server <- function(input, output, session) {
           "<br>Thresh: ", round(threshold, 3)
         )
       )) +
-      geom_abline(slope=1, intercept=1, linetype="dashed", alpha=0.5) +
+      geom_abline(slope = 1, intercept = 1, linetype = "dashed", alpha = 0.5) +
       geom_step() +
       geom_text(
         aes(x = specificity, y = sensitivity, label = label, color = assay),
@@ -161,25 +158,24 @@ server <- function(input, output, session) {
       main_theme +
       theme(legend.position = "none")
 
-    ggplotly(p, tooltip = "text") %>%
+    ggplotly(p, tooltip = "text") |>
       layout(legend = list(orientation = "h", x = 0.3, y = -0.1))
   })
 
   # -- Explore --------------------------------------------------------------
   explore_data <- reactive({
-    input_mpi <- input$exp_time_slider
+    input_mpi    <- input$exp_time_slider
     metric_col_x <- tolower(input$exp_metric_x)
     metric_col_y <- tolower(input$exp_metric_y)
-    d <- df_ %>%
-      filter(
-        sample_type == input$exp_sample_type,
-        mpi == input_mpi,
-        !is.na(.data[[metric_col_x]]),
-        !is.na(.data[[metric_col_y]])
-      )
+
+    mask <- df_$sample_type == input$exp_sample_type &
+            !is.na(df_$mpi) & df_$mpi == input_mpi &
+            !is.na(df_[[metric_col_x]]) &
+            !is.na(df_[[metric_col_y]])
+    d <- df_[mask, ]
 
     if (input$exp_assay != "Both") {
-      d <- d %>% filter(assay == input$exp_assay)
+      d <- d[d$assay == input$exp_assay, ]
     }
     d
   })
@@ -187,21 +183,20 @@ server <- function(input, output, session) {
   output$explore_plot <- renderPlotly({
     metric_col_x <- tolower(input$exp_metric_x)
     metric_col_y <- tolower(input$exp_metric_y)
-    color_col  <- input$exp_color
-    d <- explore_data()
+    color_col    <- input$exp_color
+    d            <- explore_data()
 
     if (nrow(d) == 0) {
-      return(plotly_empty(type = "scatter") %>%
-        layout(title = "No data for selected filters"))
+      return(plotly_empty(type = "scatter") |>
+               layout(title = "No data for selected filters"))
     }
 
-    min_x <- min(df_[[metric_col_x]], na.rm=TRUE)
-    max_x <- max(df_[[metric_col_x]], na.rm=TRUE)
-    min_y <- min(df_[[metric_col_y]], na.rm=TRUE)
-    max_y <- max(df_[[metric_col_y]], na.rm=TRUE)
+    min_x <- min(df_[[metric_col_x]], na.rm = TRUE)
+    max_x <- max(df_[[metric_col_x]], na.rm = TRUE)
+    min_y <- min(df_[[metric_col_y]], na.rm = TRUE)
+    max_y <- max(df_[[metric_col_y]], na.rm = TRUE)
 
-    p <- d %>%
-      ggplot(aes(
+    p <- ggplot(d, aes(
       x     = .data[[metric_col_x]],
       y     = .data[[metric_col_y]],
       color = .data[[color_col]],
@@ -237,28 +232,32 @@ server <- function(input, output, session) {
     metric_col <- tolower(input$long_metric)
     color_col  <- input$long_color
 
-    d <- df_ %>%
-      filter(sample_type == input$long_sample_type, !is.na(mpi), !is.na(.data[[metric_col]]))
+    mask <- df_$sample_type == input$long_sample_type &
+            !is.na(df_$mpi) &
+            !is.na(df_[[metric_col]])
+    d <- df_[mask, ]
 
     if (input$long_assay != "Both") {
-      d <- d %>% filter(assay == input$long_assay)
+      d <- d[d$assay == input$long_assay, ]
     }
 
     if (nrow(d) == 0) {
-      return(plotly_empty(type = "scatter") %>%
+      return(plotly_empty(type = "scatter") |>
                layout(title = "No data for selected filters"))
     }
 
-    d <- d %>%
-      summarize(
-        across(all_of(metric_col), mean),
-        .by = c(mpi, .data[[color_col]], assay, dilution)
-      ) %>%
-      arrange(mpi)
+    # Aggregate mean by group
+    agg <- aggregate(
+      d[[metric_col]],
+      by = list(mpi = d$mpi, color_ = d[[color_col]], assay = d$assay, dilution = d$dilution),
+      FUN = mean
+    )
+    names(agg)[names(agg) == "x"]      <- metric_col
+    names(agg)[names(agg) == "color_"] <- color_col
+    d <- agg[order(agg$mpi), ]
 
     if (input$long_mode == "Raw") {
-      p <- d %>%
-        ggplot(aes(
+      p <- ggplot(d, aes(
           x     = mpi,
           y     = .data[[metric_col]],
           color = .data[[color_col]],
@@ -273,13 +272,10 @@ server <- function(input, output, session) {
         geom_line() +
         geom_point(size = 2, alpha = 0.8)
 
-    } else if (input$long_mode == "Cumulative") {
-      p <- d %>%
-        mutate(
-          cum = cumsum(.data[[metric_col]]),
-          .by = c(.data[[color_col]], assay, dilution)
-        ) %>%
-        ggplot(aes(
+    } else {
+      d$cum <- ave(d[[metric_col]], d[[color_col]], d$assay, d$dilution, FUN = cumsum)
+
+      p <- ggplot(d, aes(
           x     = mpi,
           y     = cum,
           color = .data[[color_col]],
@@ -287,13 +283,13 @@ server <- function(input, output, session) {
           group = .data[[color_col]],
           text  = paste0(
             "MPI: ", mpi,
-            "<br>Cumulative ", .data[[metric_col]], ": ", round(as.numeric(cum), 3),
+            "<br>Cumulative ", metric_col, ": ", round(as.numeric(cum), 3),
             "<br>", color_col, ": ", .data[[color_col]]
           )
         )) +
         stat_smooth() +
         geom_point(size = 2)
-    } else stop()
+    }
 
     p <- p +
       facet_grid(vars(assay), vars(dilution)) +

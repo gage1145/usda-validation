@@ -25,15 +25,14 @@ jobs:
       - name: Install dependencies
         env:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-        run: |                                                                                                                          
-          install.packages(c(                                                                                                           
-            'remotes',                                                                                                                  
-            'dplyr', 'tidyr', 'janitor', 'stringr',                                                                                     
-            'shiny', 'bslib', 'ggplot2', 'pROC',                                                                                        
-            'DT', 'plotly', 'lubridate', 'shinylive',
-            'zoo'                                                                                   
-          ))                                                                                                                            
-          remotes::install_github('bergant/airtabler')                                                                                  
+        run: |
+          install.packages(c(
+            'remotes',
+            'dplyr', 'tidyr', 'janitor', 'stringr',
+            'shiny', 'bslib', 'ggplot2', 'pROC',
+            'plotly', 'lubridate', 'shinylive'
+          ))
+          remotes::install_github('bergant/airtabler')
         shell: Rscript {0}  
 
       - name: Fetch Airtable data
