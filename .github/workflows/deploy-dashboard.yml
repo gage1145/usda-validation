@@ -30,7 +30,8 @@ jobs:
             'remotes',                                                                                                                  
             'dplyr', 'tidyr', 'janitor', 'stringr',                                                                                     
             'shiny', 'bslib', 'ggplot2', 'pROC',                                                                                        
-            'DT', 'plotly', 'lubridate', 'shinylive'                                                                                    
+            'DT', 'plotly', 'lubridate', 'shinylive',
+            'zoo'                                                                                   
           ))                                                                                                                            
           remotes::install_github('bergant/airtabler')                                                                                  
         shell: Rscript {0}  
