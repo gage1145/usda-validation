@@ -6,6 +6,8 @@ library(forcats)
 library(ggridges)
 library(arrow)
 library(airtabler)
+library(janitor)
+library(scales)
 source("scripts/airtable_functions.R")
 
 
@@ -23,7 +25,14 @@ results <- tables$results$select_all(
   filterByFormula = get_formula(
     "sample_type", c("'MNPRO oral swab'", "'NADC oral swab'")
   )
-)
+) %>%
+  mutate(across(everything(), as.character))
+
+animals <- tables$animals$select_all() %>%
+  rename(animal = animal_id) %>%
+  mutate(across(everything(), as.character))
+
+
 
 
 
@@ -47,8 +56,11 @@ main_theme <- theme(
 
 
 df_ <- results %>%
+  left_join(animals, by="animal") %>%
   filter(animal != "NULL") %>%
+  clean_names() %>%
   mutate(
+    across(c(mpr, ms, ttt, raf, auc, mpi), as.numeric),
     assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC"))
   ) %>%
   mutate_at(
@@ -168,3 +180,19 @@ df_ %>%
   coord_cartesian(expand=FALSE) +
   main_theme
 ggsave("figures/oral-swabs/ridges.png", width=12, height=8)
+
+
+# Cumulative
+df_cum <- df_ %>%
+  mutate(auc = rescale(auc, c(0, 1)), .by=assay) %>%
+  summarize(across(auc, mean), .by = c(assay, group, mpi)) %>%
+  group_by(group, assay) %>%
+  arrange(mpi, .by_group = T) %>%
+  mutate(across(auc, cumsum)) %>%
+  ungroup()
+
+df_cum %>%
+  ggplot(aes(mpi, auc, color=group, linetype=assay)) +
+  geom_point() +
+  geom_line() +
+  main_theme
