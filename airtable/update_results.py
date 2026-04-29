@@ -24,8 +24,8 @@ data_dir = home_dir / "data"
 raw_dir = home_dir / "raw"
 
 parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
-parser.add_argument("--only_new_reactions", action="store_true", help="Update Results table with only reactions that have no associated results.")
-parser.add_argument("--skip_reactions", action="store_true", help="Skip updating the Reactions table and only update the Results table.")
+parser.add_argument("--only-new-reactions", action="store_true", help="Update Results table with only reactions that have no associated results.")
+parser.add_argument("--skip-reactions", action="store_true", help="Skip updating the Reactions table and only update the Results table.")
 args = parser.parse_args()
 
 skip_reactions = args.skip_reactions
@@ -141,7 +141,6 @@ rxn_df = rxn_df.loc[rxn_df["rxn_name"].isin(reactions)]
 df_results = df.rename(columns={'Reaction': 'rxn_name', "Wells": "well", "Dilutions": "dilution"})
 df_results = df_results.merge(rxn_df, "left", on="rxn_name")
 df_results = df_results.merge(sample_df, "left", on="sample_id")
-print(df_results)
 
 print(f"Total results to update: {len(df_results)}\n")
 
