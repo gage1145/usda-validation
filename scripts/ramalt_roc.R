@@ -1,6 +1,7 @@
 library(tidyverse)
 library(airtabler)
 library(pROC)
+library(janitor)
 
 main_theme <- theme(
   plot.title = element_text(size=24, hjust=0.5),
@@ -86,9 +87,11 @@ relabel_metrics <- function(x) {
 
 roc_results  <- pmap(combos, compute_roc)
 rocs     <- map(roc_results, "roc")
-coord_df <- map(roc_results, "coords") %>% 
-  bind_rows() %>%
-  mutate(metric = relabel_metrics(metric))
+coord_df <- map_dfr(roc_results, "coords") %>% 
+  mutate(
+    youden = specificity + sensitivity - 1,
+    metric = relabel_metrics(metric)
+  )
 
 # AUC summary table
 auc_df <- combos %>%
@@ -101,6 +104,10 @@ auc_df <- combos %>%
   ) %>%
   rename(assay = a, dilution = d, metric = m) %>%
   arrange(desc(auc))
+
+you_df <- coord_df %>%
+  group_by(assay, dilution, metric) %>%
+  filter(youden == max(youden, na.rm = TRUE))
 
 
 
@@ -115,7 +122,7 @@ coord_df %>%
     data = auc_df, hjust = 0, size = 6,
     show.legend = FALSE
   ) +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
+  scale_color_manual(values=c("darkcyan", "darkorange")) +
   facet_grid(vars(dilution), vars(metric)) +
   scale_x_reverse() +
   labs(y = "Sensitivity", x = "Specificity") +

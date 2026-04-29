@@ -5,6 +5,7 @@ library(ggpubr)
 library(forcats)
 library(ggridges)
 library(arrow)
+library(airtabler)
 source("scripts/airtable_functions.R")
 
 
@@ -92,20 +93,24 @@ df_ %>%
   )
 ggsave("RAFs.png", path="figures/oral-swabs", width=16, height=8)
 
+
+
 df_sum %>%
   ggplot(aes(mpi, mean_raf, color=assay)) +
   geom_line(linewidth=1, alpha=0.7) +
-  facet_wrap(vars(animal), nrow=3) +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
+  facet_wrap(vars(animal), nrow=6) +
+  scale_color_manual(values=c("darkorange", "darkcyan")) +
   labs(
-    y="Mean RAF"
+    y="Mean RAF",
+    x="Months Post-Inoculation"
   ) +
   main_theme +
   theme(
+    legend.title = element_blank(),
     legend.position = "bottom"
   )
 
-ggsave("rafs_sample_facet.png", path="figures/oral-swabs", width=16, height=8)
+ggsave("rafs_sample_facet.png", path="figures/oral-swabs", width=8, height=10)
 
 
 
