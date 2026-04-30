@@ -4,7 +4,17 @@ library(janitor)
 library(lme4)
 library(lmerTest)
 library(emmeans)
+library(scales)
 
+
+main_theme <- theme(
+  plot.title = element_text(size=24, hjust=0.5),
+  axis.title = element_text(size=20),
+  axis.text = element_text(size=12),
+  strip.text = element_text(size=16, face="bold"),
+  legend.title = element_text(size=12),
+  legend.text = element_text(size=12)
+)
 
 
 # Load the data -----------------------------------------------------------
@@ -17,8 +27,7 @@ results <- tables$results$select_all(
   filterByFormula = "{sample_type} = 'RAMALT'"
 )
 
-animals <- tables$animals$select_all()
-animals <- animals %>%
+animals <- tables$animals$select_all() %>%
   rename("animal" = "animal_id")
 
 
@@ -80,24 +89,94 @@ emmeans(auc_model, ~ mpi * assay * group,
   ) 
 
 # Quick visual check — is the AUC-MPI relationship roughly linear?
-df_ %>%
-  group_by(mpi, assay, group) %>%
-  summarise(mean_auc = mean(auc, na.rm = TRUE), .groups = "drop") %>%
-  ggplot(aes(mpi, mean_auc, color = assay)) +
-  geom_point(size = 3) +
-  geom_smooth(method = "lm", se = FALSE, linetype = "dashed") +
-  facet_grid(rows=vars(group))
+clrs <- c("darkcyan", "darkorange")
 
-df_ %>%
-  filter(group == "Inoculated", dilution == -3) %>%
-  ggplot(aes(mpi, auc, group = animal, color = animal)) +
-  geom_line(alpha = 0.6, linewidth = 0.8) +
+unique_group_months <- df_ %>%
+  filter(!is.na(mpi)) %>%
+  summarize(.by = c(group, mpi)) %>%
+  filter(duplicated(mpi))
+
+dup_group_months <- unique_group_months[duplicated(unique_group_months$mpi), "mpi"]
+
+df_group_cum <- df_ %>%
+  filter(mpi %in% unique_group_months$mpi) %>%
+  mutate(auc = rescale(auc, c(0, 1)), .by=assay) %>% 
+  summarize(across(auc, list(mean = mean, stdev = ~ sd(.) / sqrt(length(.)))), .by = c(assay, group, mpi)) %>%
+  mutate(upper = auc_mean + auc_stdev, lower = auc_mean - auc_stdev) %>%
+  group_by(group, assay) %>%
+  arrange(mpi, .by_group = TRUE) %>%
+  mutate(across(c(auc_mean, upper, lower), cumsum)) %>%
+  ungroup() 
+  # mutate(alpha_val = rescale(auc_mean, c(0, 0.2)))
+
+
+df_group_cum %>%
+  ggplot(aes(mpi, auc_mean, color = group, linetype = assay, fill = group)) +
   geom_point(size = 2) +
-  facet_wrap(animal~assay) +
-  theme(legend.position = "none") +
-  labs(title = "Individual Inoculated Animal Trajectories",
-       x = "MPI", y = "AUC")
-#
+  geom_line(linewidth=1.5) +
+  geom_ribbon(aes(ymin=lower, ymax=upper, alpha = upper), color = NA, show.legend = FALSE) +
+  scale_alpha_continuous(range = c(0, 0.3)) +
+  scale_fill_manual(values = clrs) +
+  scale_color_manual(values = clrs) +
+  scale_x_continuous(breaks=seq(0, 63, 3)) +
+  # geom_smooth(se=F) 
+  coord_cartesian(xlim = c(0, 48.5), expand=FALSE) +
+  main_theme +
+  labs(
+    y = "Normalized Cumulative Area Under the Curve",
+    x = "Months Post-Inoculation"
+  ) +
+  theme(
+    legend.title = element_blank(),
+    legend.background = element_blank(),
+    legend.position = c(0.1, 0.8)
+  )
+  # facet_grid(rows=vars(assay))
+ggsave("cum_auc.png", path="figures/RAMALT", width=12, height=8)
+
+
+# Animal level accumulation ----------------------------------------------
+
+unique_assay_months <- df_ %>%
+  filter(!is.na(mpi)) %>%
+  summarize(.by = c(assay, mpi))
+
+dup_assay_months <- unique_assay_months[duplicated(unique_assay_months$mpi), "mpi"]
+
+df_animal_cum <- df_ %>%
+  ungroup() %>%
+  filter(mpi %in% dup_assay_months) %>%
+  mutate(auc = rescale(auc, c(0, 1)), .by = assay) %>% 
+  summarize(across(auc, list(mean = mean, stdev = ~ sd(.) / sqrt(n()))), .by = c(assay, animal, mpi)) %>%
+  mutate(upper = auc_mean + auc_stdev, lower = auc_mean - auc_stdev) %>%
+  group_by(animal, assay) %>%
+  arrange(mpi, .by_group = TRUE) %>%
+  mutate(across(c(auc_mean, upper, lower), cumsum)) %>%
+  ungroup() %>%
+  mutate(across(c(auc_mean, upper, lower), ~ rescale(., c(0, 1), c(min(.data$auc_mean), max(.data$auc_mean)))), .by = assay)
+
+df_animal_cum %>%
+  ggplot(aes(mpi, auc_mean, group = assay, color = assay, fill = assay)) +
+  geom_point(size = 1.5) +
+  geom_line(linewidth=1) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha = 0.4, color = NA, show.legend = FALSE) +
+  scale_alpha_continuous(range = c(0, 0.3)) +
+  scale_fill_manual(values = clrs) +
+  scale_color_manual(values = clrs) +
+  scale_x_continuous(breaks=seq(0, 63, 12)) +
+  scale_y_continuous(breaks=seq(0, 1, 0.25)) +
+  # coord_cartesian(xlim = c(0, 48.5), expand=FALSE) +
+  labs(
+    y = "Normalized Cumulative Area Under the Curve",
+    x = "Months Post-Inoculation"
+  ) +
+  facet_wrap(vars(animal)) +
+  main_theme +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+ggsave("animal_cumulative.png", path="figures/RAMALT", width=10, height=8)
 
 library(JM)         # joint models for longitudinal and survival data
 library(survival)
