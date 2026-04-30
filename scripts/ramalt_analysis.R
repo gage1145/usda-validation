@@ -207,64 +207,37 @@ ggsurvplot(
 )
 # dev.off()
 
-#
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Trajectory clustering ---------------------------------------------------
 # Within Nano-QuIC only, do trajectory shapes cluster meaningfully?
-run_normalized_clustering <- function(assay_name, k_range = 2:4) {
-  traj_data <- df_ %>%
-    filter(dilution == -3, assay == assay_name) %>%
-    group_by(animal, group, room_number) %>%
-    arrange(mpi) %>%
-    mutate(auc_scaled = scale(auc)[,1]) %>%
-    summarise(
-      traj  = list(auc_scaled),
-      group = first(group),
-      n_obs = n(),
-      .groups = "drop"
-    ) %>%
-    filter(n_obs >= 3)
+# run_normalized_clustering <- function(assay_name, k_range = 2:4) {
+#   traj_data <- df_ %>%
+#     filter(dilution == -3, assay == assay_name) %>%
+#     group_by(animal, group, room_number) %>%
+#     arrange(mpi) %>%
+#     mutate(auc_scaled = scale(auc)[,1]) %>%
+#     summarise(
+#       traj  = list(auc_scaled),
+#       group = first(group),
+#       n_obs = n(),
+#       .groups = "drop"
+#     ) %>%
+#     filter(n_obs >= 3)
   
-  clust <- tsclust(
-    traj_data$traj,
-    type     = "partitional",
-    k        = k_range,
-    distance = "dtw_basic",
-    seed     = 42
-  )
+#   clust <- tsclust(
+#     traj_data$traj,
+#     type     = "partitional",
+#     k        = k_range,
+#     distance = "dtw_basic",
+#     seed     = 42
+#   )
   
-  list(data = traj_data, clust = clust)
-}
+#   list(data = traj_data, clust = clust)
+# }
 
-nano_clust <- run_normalized_clustering("Nano-QuIC")
-rt_clust   <- run_normalized_clustering("RT-QuIC")
+# nano_clust <- run_normalized_clustering("Nano-QuIC")
+# rt_clust   <- run_normalized_clustering("RT-QuIC")
 
-# Compare silhouette scores across k values
-sapply(nano_clust$clust, cvi, type = "internal")["Sil",]
-sapply(rt_clust$clust,   cvi, type = "internal")["Sil",]
+# # Compare silhouette scores across k values
+# sapply(nano_clust$clust, cvi, type = "internal")["Sil",]
+# sapply(rt_clust$clust,   cvi, type = "internal")["Sil",]
 
