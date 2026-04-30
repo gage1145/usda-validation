@@ -183,16 +183,43 @@ ggsave("figures/oral-swabs/ridges.png", width=12, height=8)
 
 
 # Cumulative
+clrs <- c("darkcyan", "darkorange")
+
+unique_group_months <- df_ %>%
+  filter(!is.na(mpi)) %>%
+  summarize(.by = c(group, mpi)) %>%
+  filter(duplicated(mpi))
+
+dup_group_months <- unique_group_months[duplicated(unique_group_months$mpi), "mpi"]
+
 df_cum <- df_ %>%
-  mutate(auc = rescale(auc, c(0, 1)), .by=assay) %>%
-  summarize(across(auc, mean), .by = c(assay, group, mpi)) %>%
+  filter(mpi %in% unique_group_months$mpi) %>%
+  mutate(auc = rescale(auc, c(0, 1)), .by=assay) %>% 
+  summarize(across(auc, list(mean = mean, stdev = ~ sd(.) / sqrt(length(.)))), .by = c(assay, group, mpi)) %>%
+  mutate(upper = auc_mean + auc_stdev, lower = auc_mean - auc_stdev) %>%
   group_by(group, assay) %>%
-  arrange(mpi, .by_group = T) %>%
-  mutate(across(auc, cumsum)) %>%
-  ungroup()
+  arrange(mpi, .by_group = TRUE) %>%
+  mutate(across(c(auc_mean, upper, lower), cumsum)) %>%
+  ungroup() 
 
 df_cum %>%
-  ggplot(aes(mpi, auc, color=group, linetype=assay)) +
-  geom_point() +
-  geom_line() +
-  main_theme
+  ggplot(aes(mpi, auc_mean, color = group, linetype = assay, fill = group)) +
+  geom_point(size = 2) +
+  geom_line(linewidth=1.5) +
+  geom_ribbon(aes(ymin=lower, ymax=upper, alpha = upper), color = NA, show.legend = FALSE) +
+  scale_alpha_continuous(range = c(0, 0.3)) +
+  scale_fill_manual(values = clrs) +
+  scale_color_manual(values = clrs) +
+  scale_x_continuous(breaks=seq(0, 63, 3)) +
+  # geom_smooth(se=F) 
+  # coord_cartesian(xlim = c(0, 48.5), expand=FALSE) +
+  main_theme +
+  labs(
+    y = "Normalized Cumulative Area Under the Curve",
+    x = "Months Post-Inoculation"
+  ) +
+  theme(
+    legend.title = element_blank(),
+    legend.background = element_blank(),
+    legend.position = c(0.1, 0.8)
+  )
