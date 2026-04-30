@@ -6,6 +6,7 @@ library(forcats)
 library(stringr)
 library(airtabler)
 source("scripts/airtable_functions.R")
+library(janitor)
 
 
 
@@ -18,24 +19,13 @@ APP <- "app7KsgYl2jhOnYg7"
 # Get the necessary tables
 tables <- airtable(APP, c("animals", "samples", "results", "reactions"))
 
-animals <- tables$animals$select_all()
-
-# Filter for post-mortem samples
-samples <- tables$samples$select_all(
-  filterByFormula = "{mortem} = 'post-mortem'"
-) %>%
-  rename("sample" = "id") %>%
-  select("sample", "sample_id", "animal_id")
+animals <- tables$animals$select_all() %>%
+  rename("animal" = "animal_id")
 
 # Filter results for post-mortem samples
 results <- tables$results$select_all(
-  filterByFormula = get_formula("sample", samples$sample_id)
+  filterByFormula = "{mortem} = 'post-mortem'"
 )
-
-# Combine data frames
-results <- results %>%
-  mutate_at(c("sample", "reaction"), as.character) %>%
-  left_join(samples, "sample")
 
 
 
@@ -53,38 +43,34 @@ main_theme <- theme(
 )
 
 
-
-# Format the data ---------------------------------------------------------
+# Format the data --------------------------------------------------------
 
 
 
 df_ <- results %>%
+  mutate(across(everything(), as.character)) %>%
+  left_join(animals, by = "animal") %>%
+  clean_names() %>%
   mutate(
-    sample_id = as.factor(sample_id),
-    animal_id = as.factor(as.character(animal_id)),
-    assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC")),
-    sample_type = as.factor(as.character(sample_type)),
+    across(c(sample_id, animal, sample_type, group, room_number), as.factor),
+    across(c(mpr, raf, ttt, ms, auc), as.numeric),
+    assay = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
     dilution = factor(
       dilution, 
       levels=c(-2, -3, -4), 
-      labels=c("10^{-2}", "10^{-3}", "10^{-4}")
+      # labels=c(bquote("10^{-2}"), bquote("10^{-3}"), bquote("10^{-4}"))
     )
   )
 
 df_sum <- df_ %>%
-  group_by(sample_id, animal_id, dilution, assay, sample_type) %>%
+  group_by(animal, dilution, assay, sample_type) %>%
   summarize(
-    median_raf = median(raf)
-  )
-
-df_sum_sum <- df_ %>%
-  group_by(sample_type, assay, dilution) %>%
-  summarize(
-    mean_raf = mean(raf),
-    sd_raf = sd(raf),
-    max_raf = max(raf),
-    min_raf = min(raf)
-  )
+    median_raf = median(raf),
+    std_err = sd(raf) / sqrt(n()),
+    upper = median_raf + std_err,
+    lower = median_raf - std_err
+  ) %>%
+  mutate(dilution = factor(dilution, levels = c("-2", "-3", "-4"), labels=c(bquote("10^{-2}"), bquote("10^{-3}"), bquote("10^{-4}"))))
 
 
 
@@ -92,16 +78,15 @@ df_sum_sum <- df_ %>%
 
 
 
-df_ %>%
-  ggplot(aes(fct_inorder(animal_id), raf, fill = assay)) +
-  geom_line(aes(y=median_raf, color=assay, group=assay), data=df_sum, linewidth=1) +
-  geom_boxplot(outliers = FALSE, linewidth=0.25) +
+df_sum %>%
+  ggplot(aes(fct_inorder(animal), y=median_raf, ymin=lower, ymax=upper, color=assay, group=assay, fill = assay)) +
+  geom_line(linewidth=1) +
+  geom_point() +
+  geom_ribbon(alpha = 0.4, color = NA) +
   facet_grid(vars(fct_rev(dilution)), vars(sample_type), space = "free", labeller=label_parsed) +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-  scale_y_continuous(sec.axis = sec_axis(~ ., name = "Dilution Factor", breaks = NULL)) +
+  scale_color_manual(values=c("darkcyan", "darkorange")) +
+  scale_fill_manual(values=c("darkcyan", "darkorange")) +
   labs(
-    title="Comparing Assay Kinetics between Tissues",
     y="Rate of Amyloid Formation (1/s)"
   ) +
   main_theme +
@@ -130,8 +115,8 @@ df_ %>%
     alpha=0.6
   ) +
   facet_grid(vars(sample_type), scale = "free") +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
+  scale_color_manual(values=c("darkcyan", "darkorange")) +
+  scale_fill_manual(values=c("darkcyan", "darkorange")) +
   scale_y_discrete(expand=c(0.2, 0)) +
   labs(
     title="Density of Assay Kinetics",
@@ -162,29 +147,49 @@ ggsave(
 # Mean RAF figures --------------------------------------------------------
 
 
+library(ggsignif)
+library(scales)
 
-df_sum_sum %>%
+df_animal <- df_ %>%
+  summarize(raf=mean(raf), .by=c(animal, sample_type, assay, dilution))
+
+df_ %>%
+  group_by(sample_type, assay, dilution) %>%
+  summarize(
+    mean_raf = mean(raf),
+    sd_raf = sd(raf),
+    max_raf = max(raf),
+    min_raf = min(raf),
+    mean_ttt = paste0("TtT = ", round(mean(ttt), 1), "hr"),
+    ttt_pos = mean_raf + 0.01
+  ) %>%
   ggplot(aes(
     dilution, 
     mean_raf,
     ymax=mean_raf + sd_raf,
     ymin=mean_raf - sd_raf,
-    fill=assay
+    fill=assay,
+    group = assay
   )) +
   geom_col(position="dodge", color="black") +
   geom_errorbar(position=position_dodge(0.9), width=0.4) +
+  geom_label(aes(label=mean_ttt, y=ttt_pos), position=position_dodge(1), show.legend = FALSE) +
+  stat_compare_means(
+    aes(x=dilution, y=raf, group=assay, label=paste("p =", after_stat(p.format))), 
+    data = df_animal, label.y = 0.185, inherit.aes = FALSE, size=6
+  ) +
   facet_grid(~sample_type, scales="free_x", space="free_x") +
-  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-  scale_y_continuous(breaks=seq(0, 0.2, 0.02)) +
+  scale_y_continuous(expand = expansion(c(0, 0.1))) +
+  scale_fill_manual(values=c("darkcyan", "darkorange")) +
   labs(
-    title="General Assay Comparisons",
-    y="Mean RAF",
+    y="Rate of Amyloid Formation",
     x="Log Dilution Factors"
   ) +
   main_theme +
   theme(
-    legend.position = c(0.9, 0.9),
-    legend.background = element_blank(),
+    legend.position = c(0.5, 0.8),
+    legend.direction = "horizontal",
+    legend.background = element_rect(fill="white", color="black", linewidth=0.5),
     legend.title = element_blank()
   )
-ggsave("mean_RAF_col.png", path="figures/necropsy", width=16, height=8)
+ggsave("mean_raf_col.png", path="figures/necropsy", width=16, height=8)
