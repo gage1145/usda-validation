@@ -21,15 +21,17 @@ print(f"[bold green]Connected to Airtable Base[/bold green]: [bold blue]{app}[/b
 
 home_dir = Path("")
 data_dir = home_dir / "data"
-raw_dir = home_dir / "raw"
+raw_dir = home_dir / "raw" / "processedSamples"
 
 parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
 parser.add_argument("--only-new-reactions", action="store_true", help="Update Results table with only reactions that have no associated results.")
 parser.add_argument("--skip-reactions", action="store_true", help="Skip updating the Reactions table and only update the Results table.")
+parser.add_argument("--dry-run", action="store_true", help="Run the script without saving the results to Airtable.")
 args = parser.parse_args()
 
 skip_reactions = args.skip_reactions
 only_new_reactions = args.only_new_reactions
+dry_run = args.dry_run
 
 # Formulae
 def rxn_formula(rxn_name):
@@ -230,4 +232,5 @@ updated_results = df_results.progress_apply(update_result, axis=1)
 results_to_save = [result for result in updated_results if result]
 
 # Save Results to Airtable
-Result.batch_save(results_to_save)
+if not dry_run:
+    Result.batch_save(results_to_save)
