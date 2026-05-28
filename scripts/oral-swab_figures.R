@@ -5,6 +5,9 @@ library(ggpubr)
 library(forcats)
 library(ggridges)
 library(arrow)
+library(airtabler)
+library(janitor)
+library(scales)
 source("scripts/airtable_functions.R")
 
 
@@ -22,7 +25,14 @@ results <- tables$results$select_all(
   filterByFormula = get_formula(
     "sample_type", c("'MNPRO oral swab'", "'NADC oral swab'")
   )
-)
+) %>%
+  mutate(across(everything(), as.character))
+
+animals <- tables$animals$select_all() %>%
+  rename(animal = animal_id) %>%
+  mutate(across(everything(), as.character))
+
+
 
 
 
@@ -46,8 +56,11 @@ main_theme <- theme(
 
 
 df_ <- results %>%
+  left_join(animals, by="animal") %>%
   filter(animal != "NULL") %>%
+  clean_names() %>%
   mutate(
+    across(c(mpr, ms, ttt, raf, auc, mpi), as.numeric),
     assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC"))
   ) %>%
   mutate_at(
@@ -92,20 +105,24 @@ df_ %>%
   )
 ggsave("RAFs.png", path="figures/oral-swabs", width=16, height=8)
 
+
+
 df_sum %>%
   ggplot(aes(mpi, mean_raf, color=assay)) +
   geom_line(linewidth=1, alpha=0.7) +
-  facet_wrap(vars(animal), nrow=3) +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
+  facet_wrap(vars(animal), nrow=6) +
+  scale_color_manual(values=c("darkorange", "darkcyan")) +
   labs(
-    y="Mean RAF"
+    y="Mean RAF",
+    x="Months Post-Inoculation"
   ) +
   main_theme +
   theme(
+    legend.title = element_blank(),
     legend.position = "bottom"
   )
 
-ggsave("rafs_sample_facet.png", path="figures/oral-swabs", width=16, height=8)
+ggsave("rafs_sample_facet.png", path="figures/oral-swabs", width=8, height=10)
 
 
 
@@ -163,3 +180,46 @@ df_ %>%
   coord_cartesian(expand=FALSE) +
   main_theme
 ggsave("figures/oral-swabs/ridges.png", width=12, height=8)
+
+
+# Cumulative
+clrs <- c("darkcyan", "darkorange")
+
+unique_group_months <- df_ %>%
+  filter(!is.na(mpi)) %>%
+  summarize(.by = c(group, mpi)) %>%
+  filter(duplicated(mpi))
+
+dup_group_months <- unique_group_months[duplicated(unique_group_months$mpi), "mpi"]
+
+df_cum <- df_ %>%
+  filter(mpi %in% unique_group_months$mpi) %>%
+  mutate(auc = rescale(auc, c(0, 1)), .by=assay) %>% 
+  summarize(across(auc, list(mean = mean, stdev = ~ sd(.) / sqrt(length(.)))), .by = c(assay, group, mpi)) %>%
+  mutate(upper = auc_mean + auc_stdev, lower = auc_mean - auc_stdev) %>%
+  group_by(group, assay) %>%
+  arrange(mpi, .by_group = TRUE) %>%
+  mutate(across(c(auc_mean, upper, lower), cumsum)) %>%
+  ungroup() 
+
+df_cum %>%
+  ggplot(aes(mpi, auc_mean, color = group, linetype = assay, fill = group)) +
+  geom_point(size = 2) +
+  geom_line(linewidth=1.5) +
+  geom_ribbon(aes(ymin=lower, ymax=upper, alpha = upper), color = NA, show.legend = FALSE) +
+  scale_alpha_continuous(range = c(0, 0.3)) +
+  scale_fill_manual(values = clrs) +
+  scale_color_manual(values = clrs) +
+  scale_x_continuous(breaks=seq(0, 63, 3)) +
+  # geom_smooth(se=F) 
+  # coord_cartesian(xlim = c(0, 48.5), expand=FALSE) +
+  main_theme +
+  labs(
+    y = "Normalized Cumulative Area Under the Curve",
+    x = "Months Post-Inoculation"
+  ) +
+  theme(
+    legend.title = element_blank(),
+    legend.background = element_blank(),
+    legend.position = c(0.1, 0.8)
+  )

@@ -1,8 +1,11 @@
 ---
-# title: "USDA Validation Report"
-# author: "Gage Rowden"
+title: "USDA Validation Report"
+author: "Gage Rowden"
 format:
   pdf:
+    fig-width: 6.5
+    fig-height: 4.5
+    fig-align: center
     documentclass: report
     header-includes:
       - \usepackage{fontspec}
@@ -22,22 +25,132 @@ format:
 format-links: false
 editor: source
 ---
+## RAMALT ROC Analysis
+RAMALT biopsies taken at time zero were considered the negative control group, and those taken at time of necropsy were considered the positive control group. Three metrics, AUC, MPR, and MS were analyzed to determine the sensitivity and specificity of the two assays and dilution factors.
 
-## Necropsy
+Data is first loaded from Airtable using the airtabler API wrapper. The library can be installed with `{r} remotes::install_github("https://github.com/bergant/airtabler")`. The user must also have a personal access token with the appropriate permissions to access the data.
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(airtabler)
+
+APP <- "app7KsgYl2jhOnYg7"
+
+# Get the necessary tables
+tables <- airtable(APP, c("animals", "results"))
+
+results <- tables$results$select_all(
+  filterByFormula = "{sample_type} = 'RAMALT'"
+)
+
+animals <- tables$animals$select_all()
+animals <- rename(animals, "animal" = "animal_id")
+```
+
+First the data was cleaned and formatted. 
+```{r warning=FALSE, message=FALSE}
+library(janitor)
+
+df_ <- results %>%
+  mutate(across(everything(), as.character)) %>%
+  left_join(animals, by = "animal") %>%
+  clean_names() %>%
+  mutate(
+    across(c(sample_id, animal), as.factor),
+    assay = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
+    mpi   = as.integer(mpi),
+    across(c(mpr, raf, ttt, ms, auc), as.numeric)
+  )
+```
+Next, the data was subset to include only the control groups.
+```{r}
+df_roc <- df_ %>%
+  filter(mpi == 0 | mortem == "post-mortem") %>%
+  mutate(
+    positive = as.integer(mortem == "post-mortem")
+  ) %>%
+  pivot_longer(cols=c("mpr", "ms", "auc"))
+```
+Combinations of the relevant variables (metrics, assay, dilution) were generated for making ROCs of subset data. Additionally, a couple of functions for generating the ROCs and formatting data.
+```{r message=FALSE}
+library(pROC)
+
+# Build all combinations of variables
+combos <- expand.grid(
+  m = unique(df_roc$name),
+  a = unique(df_roc$assay),
+  d = unique(df_roc$dilution),
+  stringsAsFactors = FALSE
+)
+
+# Function to compute ROC + coords
+compute_roc <- function(m, a, d) {
+  sub_df <- df_roc %>%
+    filter(name == m, assay == a, dilution == d)
+  
+  sub_roc <- roc(
+    sub_df, response = "positive", predictor = "value", quiet=TRUE
+  )
+  sub_roc$metric   <- m
+  sub_roc$assay    <- a
+  sub_roc$dilution <- d
+  
+  coord_df <- coords(sub_roc) %>%
+    mutate(metric = m, assay = a, dilution = d)
+  
+  list(roc = sub_roc, coords = coord_df)
+}
+
+# Metric Labeller (capitalizes the metric acronyms)
+relabel_metrics <- function(x) {
+  lvls = sort(unique(x))
+  factor(x, levels = lvls, labels = toupper(lvls))
+}
+```
+### RAMALT ROC Results
+Apply the ROC function to the sub-sampled datasets.
+```{r message=FALSE}
+library(kableExtra)
+
+roc_results  <- pmap(combos, compute_roc)
+rocs         <- map(roc_results, "roc")
+coord_df     <- map(roc_results, "coords") %>% 
+  bind_rows() %>%
+  mutate(metric = relabel_metrics(metric))
+
+# AUC summary table
+auc_df <- combos %>%
+  mutate(
+    auc         = map_dbl(rocs, auc),
+    specificity = 0.65,
+    sensitivity = ifelse(a == "RT-QuIC", 0.15, 0.05),
+    label       = paste0(a, " AUC = ", signif(auc, 3)),
+    m = relabel_metrics(m)
+  ) %>%
+  rename(assay = a, dilution = d, metric = m) %>%
+  arrange(desc(auc))
+kable(auc_df)
+```
+
+```{r echo=FALSE}
+coord_df %>%
+  group_by(assay, dilution, metric) %>%
+  arrange(sensitivity) %>%
+  ggplot(aes(specificity, sensitivity, color = assay)) +
+  geom_step(linewidth = 1) +
+  geom_text(
+    aes(label = label, color = assay),
+    data = auc_df, hjust = 0, size = 2,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values=c("darkslateblue", "darkorange")) +
+  facet_grid(vars(dilution), vars(metric)) +
+  scale_x_reverse() +
+  labs(y = "Sensitivity", x = "Specificity") +
+  theme(
+    legend.position = "none",
+    legend.title = element_blank()
+  )
+```
 
 
-![Rates of amyloid formation of necropsy samples. Plot is facetted by tissue type and dilution factor. Samples are denoted on the x-axis. Generally, for obex, a dilution factor of 10$^{-4}$ is considered standard. For RAMALT and RPLN, a dilution factor of 10$^{-3}$. At standard dilutions, Nano-QuIC generally out-performs RT-QuIC. Notably, for sample B-227, Nano-QuIC had positive seeding activity at 10$^{-2}$ whereas RT-QuIC did not. This animal was euthanized 3 months into the study.](figures/necropsy/RAFs.png)
 
-![Density plots of rates of amyloid formation. For each sample type (obex, RAMALT, and RPLN), Nano-QuIC tends to have faster reaction kinetics.](figures/necropsy/histograms.png)
-
-![](figures/necropsy/mean_RAF_col.png)
-
-## Whole Blood
-
-![](figures/blood/combined_light.png)
-
-## Oral Swabs
-
-![](figures/oral-swabs/light_RAFs.png)
-
-![](figures/oral-swabs/ridges.png)
