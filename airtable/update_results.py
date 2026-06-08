@@ -66,7 +66,7 @@ def update_reaction(rxn):
     existing_rxn = rxn in existing_rxn_names
 
     if existing_rxn:
-        print(f"Entry already exists for rxn: [yellow]{rxn}[/yellow]. [red]Skipping entry.[/red]")
+        # print(f"Entry already exists for rxn: [yellow]{rxn}[/yellow]. [red]Skipping entry.[/red]")
         return
     
     rxn_split     = rxn.split("_")
@@ -112,7 +112,7 @@ def load_results(reactions, only_new_reactions=False):
         
         print("[bold yellow]Filtering to only reactions with no associated results...[/bold yellow]\n")
         reactions = filter_new_reactions(reactions)
-        print(f"Found {len(reactions)} reactions with no results.\n")
+        print(f"Found {len(reactions)} reactions with no results.\n {reactions}")
         df = df.loc[df["Reaction"].isin(reactions)]
         print(f"Filtered to {len(df)} results with new reactions.\n")
 
