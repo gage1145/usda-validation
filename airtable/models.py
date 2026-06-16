@@ -41,24 +41,6 @@ class Technician(Model):
         base_id = app
         table_name = "technicians"
 
-class Sample(Model):
-    sample_id = F.SingleLineTextField("sample_id")
-    animal = F.LinkField("animal", Animal, lazy=True)
-    sample_type_id = F.LinkField("sample_type_id", SampleType, lazy=True)
-    sample_type = F.LookupField("sample_type")
-    mortem = F.LookupField("mortem")
-    concentration = F.PercentField("concentration")
-    mpi = F.NumberField("mpi")
-    bilateral = F.CheckboxField("bilateral")
-    process_date = F.DateField("process_date")
-    technician_id = F.LinkField("technician_id", Technician, lazy=True)
-    tech_name = F.LookupField("tech_name")
-
-    class Meta:
-        api_key = KEY
-        base_id = app
-        table_name = "samples"
-
 class Reaction(Model):
     rxn_name = F.SingleLineTextField("rxn_name")
     assay = F.SelectField("assay")
@@ -72,6 +54,25 @@ class Reaction(Model):
         api_key = KEY
         base_id = app
         table_name = "reactions"
+
+class Sample(Model):
+    sample_id = F.SingleLineTextField("sample_id")
+    animal = F.LinkField("animal", Animal, lazy=True)
+    sample_type_id = F.LinkField("sample_type_id", SampleType, lazy=True)
+    sample_type = F.LookupField("sample_type")
+    mortem = F.LookupField("mortem")
+    concentration = F.PercentField("concentration")
+    mpi = F.NumberField("mpi")
+    bilateral = F.CheckboxField("bilateral")
+    process_date = F.DateField("process_date")
+    technician_id = F.LinkField("technician_id", Technician, lazy=True)
+    tech_name = F.LookupField("tech_name")
+    reactions = F.LinkField("reactions", Reaction, lazy=True)
+
+    class Meta:
+        api_key = KEY
+        base_id = app
+        table_name = "samples"
 
 class SampleReaction(Model):
     junction_id = F.AutoNumberField("junction_id")

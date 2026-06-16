@@ -20,7 +20,7 @@ base = api.base(app)
 print(f"[bold green]Connected to Airtable Base[/bold green]: [bold blue]{app}[/bold blue]\n")
 
 home_dir = Path("")
-data_dir = home_dir / "data"
+data_dir = home_dir / "data" / "processedSamples"
 raw_dir = home_dir / "raw" / "processedSamples"
 
 parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
@@ -59,15 +59,15 @@ airtable_reactions = Reaction.all()
 existing_rxn_names = set([rxn.rxn_name for rxn in airtable_reactions])
 new_reactions      = [rxn for rxn in reactions if rxn not in existing_rxn_names]
 
+print("[bold green]Retrieving samples from Airtable...[/bold green]")
 airtable_samples   = Sample.all()
+print(f"[bold green]Retrieved {len(airtable_samples)} samples from Airtable.[/bold green]\n")
 
 # Update Reaction Table
 def update_reaction(rxn):
     existing_rxn = rxn in existing_rxn_names
 
-    if existing_rxn:
-        # print(f"Entry already exists for rxn: [yellow]{rxn}[/yellow]. [red]Skipping entry.[/red]")
-        return
+    if existing_rxn: return
     
     rxn_split     = rxn.split("_")
     assay         = rxn_split[rxn.count("_")]
@@ -86,19 +86,30 @@ def update_reaction(rxn):
         reader      = reader,
         temperature = 42
     )
-    reaction.save()
+    return reaction
 
-if not skip_reactions:
-    list(map(update_reaction, reactions))
+if not skip_reactions: 
+    updated_reactions = list(map(update_reaction, reactions))
+    reactions_to_save = [reaction for reaction in updated_reactions if reaction]
+    if reactions_to_save:
+        print(f"\n[bold green]Saving {len(reactions_to_save)} reactions to Airtable...[/bold green]")
+        Reaction.batch_save(updated_reactions)
+    else:
+        print("[bold yellow]No new reactions to save.[/bold yellow]\n")
 else:
-    print("Skipping updating Reactions table. Only updating Results table.\n")
+    print("[bold yellow]Skipping updating Reactions table. Only updating Results table.[/bold yellow]\n")
 
 if new_reactions:
+    print("[bold green]Retrieving reactions from Airtable...[/bold green]\n")
     airtable_reactions = Reaction.all()
+    print(f"[bold green]Retrieved {len(airtable_reactions)} reactions from Airtable.[/bold green]\n")
 
 rxns_no_results = set([rxn.rxn_name for rxn in airtable_reactions if not rxn.results])
+print(f"[bold green]Found {len(rxns_no_results)} reactions without results.[/bold green]")
+print(rxns_no_results)
 
 def load_results(reactions, only_new_reactions=False):
+    print("[bold green]Loading results from parquet files...[/bold green]")
     result_files = list(data_dir.rglob("calcs.parquet"))
     df_list = list(map(pd.read_parquet, result_files))
     df = pd.concat(df_list).rename(columns={"Sample IDs": "sample_id"})
@@ -112,9 +123,7 @@ def load_results(reactions, only_new_reactions=False):
         
         print("[bold yellow]Filtering to only reactions with no associated results...[/bold yellow]\n")
         reactions = filter_new_reactions(reactions)
-        print(f"Found {len(reactions)} reactions with no results.\n {reactions}")
         df = df.loc[df["Reaction"].isin(reactions)]
-        print(f"Filtered to {len(df)} results with new reactions.\n")
 
     return df
 
@@ -144,7 +153,7 @@ df_results = df.rename(columns={'Reaction': 'rxn_name', "Wells": "well", "Diluti
 df_results = df_results.merge(rxn_df, "left", on="rxn_name")
 df_results = df_results.merge(sample_df, "left", on="sample_id")
 
-print(f"Total results to update: {len(df_results)}\n")
+print(f"[bold green]Total results to update:[/bold green] {len(df_results)}\n")
 
 # Get Results from Airtable
 if not only_new_reactions:
@@ -154,6 +163,7 @@ if not only_new_reactions:
             "rxn_id": result.reaction[0].id,
             "well": result.well
         }
+    print("[bold green]Retrieving results from Airtable...[/bold green]\n")
     airtable_results = Result.all()
     results = pd.DataFrame(map(get_results, airtable_results))
     df_results = pd.merge(df_results, results, "left", on=["rxn_id", "well"])
@@ -172,6 +182,13 @@ def get_reaction(row):
     if pd.isna(rxn_id):
         return None
     return [rxn for rxn in airtable_reactions if rxn_id == rxn.id]
+
+def get_reactions(row): # for getting reactions from a nested column
+    rxn_ids = row.get("rxn_id")
+    # if not rxn_ids: return None
+    rxns = [rxn for rxn_id in rxn_ids for rxn in airtable_reactions if rxn_id == rxn.id]
+    if len(rxns) == 0: raise ValueError("No reactions found for row.")
+    return rxns
 
 def get_metrics(row):
     return {    
@@ -198,6 +215,13 @@ tqdm.pandas(desc="Updating Results")
 def update_result(row):
     metrics = get_metrics(row)
     result = get_result(row)
+
+    sample = get_sample(row)
+    if not sample: return
+
+    reaction = get_reaction(row)
+    if not reaction: return
+
     if result:
         result.dilution = metrics.get("dilution")
         result.mpr = metrics.get("mpr")
@@ -206,13 +230,6 @@ def update_result(row):
         result.raf = metrics.get("raf")
         result.auc = metrics.get("auc")
     else:
-        sample = get_sample(row)
-        if not sample:
-            return
-
-        reaction = get_reaction(row)
-        if not reaction:
-            return
 
         result = Result(
             sample = sample,
@@ -228,9 +245,27 @@ def update_result(row):
     return result
 
 # Generate Results to Save
-updated_results = df_results.progress_apply(update_result, axis=1)
+updated_results = list(df_results.progress_apply(update_result, axis=1))
 results_to_save = [result for result in updated_results if result]
 
-# Save Results to Airtable
+tqdm.pandas(desc="Updating Samples")
+
+def update_sample_reaction(row):
+    sample = get_sample(row)[0]
+    if not sample: return
+    reactions = get_reactions(row)
+    if not reactions: return
+    sample.reactions = reactions
+    return sample
+
+# Update Samples with Reactions
+sample_rxn_df = df_results[["id", "rxn_id"]].groupby("id").agg(list).reset_index()
+updated_samples = sample_rxn_df.progress_apply(update_sample_reaction, axis=1)
+samples_to_save = [sample for sample in updated_samples if sample]
+
+# Save Samples and Results to Airtable
 if not dry_run:
+    print(f"\nSaving {len(samples_to_save)} samples to Airtable.")
+    Sample.batch_save(samples_to_save)
+    print(f"\nSaving {len(results_to_save)} results to Airtable.")
     Result.batch_save(results_to_save)

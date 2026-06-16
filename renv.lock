@@ -1,6 +1,6 @@
 {
   "R": {
-    "Version": "4.4.1",
+    "Version": "4.4.3",
     "Repositories": [
       {
         "Name": "CRAN",
@@ -117,7 +117,8 @@
       "NeedsCompilation": "no",
       "Author": "Andrew Clausen [aut], Serguei Sokol [aut, cre] (<https://orcid.org/0000-0002-5674-3327>), Andreas Rappold [ctb]",
       "Maintainer": "Serguei Sokol <sokol@insa-toulouse.fr>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "Formula": {
       "Package": "Formula",
@@ -135,7 +136,8 @@
       "NeedsCompilation": "no",
       "Author": "Achim Zeileis [aut, cre] (<https://orcid.org/0000-0003-0918-3766>), Yves Croissant [aut]",
       "Maintainer": "Achim Zeileis <Achim.Zeileis@R-project.org>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "GPArotation": {
       "Package": "GPArotation",
@@ -407,7 +409,8 @@
       "NeedsCompilation": "yes",
       "Author": "Doug Bates [aut] (<https://orcid.org/0000-0001-8316-9503>), Dirk Eddelbuettel [aut, cre] (<https://orcid.org/0000-0001-6419-907X>), Romain Francois [aut] (<https://orcid.org/0000-0002-2444-4226>), Yixuan Qiu [aut] (<https://orcid.org/0000-0003-0109-6692>), Authors of Eigen [cph] (Authorship and copyright in included Eigen library as detailed in inst/COPYRIGHTS)",
       "Maintainer": "Dirk Eddelbuettel <edd@debian.org>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "Rdpack": {
       "Package": "Rdpack",
@@ -508,7 +511,8 @@
       "URL": "http://www.econ.uiuc.edu/~roger/research/sparse/sparse.html",
       "NeedsCompilation": "yes",
       "Author": "Roger Koenker [cre, aut], Pin Tian Ng [ctb] (Contributions to Sparse QR code), Yousef Saad [ctb] (author of sparskit2), Ben Shaby [ctb] (author of chol2csr), Martin Maechler [ctb] (chol() tweaks; S4, <https://orcid.org/0000-0002-8685-9910>)",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "abind": {
       "Package": "abind",
@@ -529,7 +533,8 @@
       "License": "MIT + file LICENSE",
       "NeedsCompilation": "no",
       "Author": "Tony Plate [aut, cre], Richard Heiberger [aut]",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "airtabler": {
       "Package": "airtabler",
@@ -546,7 +551,6 @@
       ],
       "License": "MIT + file LICENSE",
       "URL": "https://github.com/bergant/airtabler",
-      "LazyData": "TRUE",
       "Imports": [
         "httr",
         "jsonlite"
@@ -557,7 +561,8 @@
       "RemoteRepo": "airtabler",
       "RemoteUsername": "bergant",
       "RemoteRef": "HEAD",
-      "RemoteSha": "c53967962a97396dc738fa14e3aa0537c4bc4dac"
+      "RemoteSha": "c53967962a97396dc738fa14e3aa0537c4bc4dac",
+      "NeedsCompilation": "no"
     },
     "arrow": {
       "Package": "arrow",
@@ -1142,7 +1147,8 @@
       "NeedsCompilation": "no",
       "Author": "John Fox [aut, cre], Sanford Weisberg [aut], Brad Price [aut], Daniel Adler [ctb], Douglas Bates [ctb], Gabriel Baud-Bovy [ctb], Ben Bolker [ctb], Steve Ellison [ctb], David Firth [ctb], Michael Friendly [ctb], Gregor Gorjanc [ctb], Spencer Graves [ctb], Richard Heiberger [ctb], Pavel Krivitsky [ctb], Rafael Laboissiere [ctb], Martin Maechler [ctb], Georges Monette [ctb], Duncan Murdoch [ctb], Henric Nilsson [ctb], Derek Ogle [ctb], Brian Ripley [ctb], Tom Short [ctb], William Venables [ctb], Steve Walker [ctb], David Winsemius [ctb], Achim Zeileis [ctb], R-Core [ctb]",
       "Maintainer": "John Fox <jfox@mcmaster.ca>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "carData": {
       "Package": "carData",
@@ -1164,11 +1170,12 @@
       "URL": "https://r-forge.r-project.org/projects/car/, https://CRAN.R-project.org/package=carData, https://socialsciences.mcmaster.ca/jfox/Books/Companion/index.html",
       "Author": "John Fox [aut, cre], Sanford Weisberg [aut], Brad Price [aut]",
       "Maintainer": "John Fox <jfox@mcmaster.ca>",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Repository/R-Forge/Project": "car",
       "Repository/R-Forge/Revision": "694",
       "Repository/R-Forge/DateTimeStamp": "2022-01-05 19:40:37",
-      "NeedsCompilation": "no"
+      "NeedsCompilation": "no",
+      "Encoding": "UTF-8"
     },
     "cellranger": {
       "Package": "cellranger",
@@ -1367,7 +1374,8 @@
       "RoxygenNote": "7.2.1",
       "NeedsCompilation": "no",
       "Author": "Taiyun Wei [cre, aut], Viliam Simko [aut], Michael Levy [ctb], Yihui Xie [ctb], Yan Jin [ctb], Jeff Zemla [ctb], Moritz Freidank [ctb], Jun Cai [ctb], Tomas Protivinsky [ctb]",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "cowplot": {
       "Package": "cowplot",
@@ -2766,7 +2774,8 @@
       "NeedsCompilation": "no",
       "Author": "Baptiste Auguie [aut, cre], Anton Antonov [ctb]",
       "Maintainer": "Baptiste Auguie <baptiste.auguie@gmail.com>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "gridtext": {
       "Package": "gridtext",
@@ -3519,7 +3528,8 @@
       "NeedsCompilation": "yes",
       "Author": "Deepayan Sarkar [aut, cre] (<https://orcid.org/0000-0003-4107-1553>), Felix Andrews [ctb], Kevin Wright [ctb] (documentation), Neil Klepeis [ctb], Johan Larsson [ctb] (miscellaneous improvements), Zhijian (Jason) Wen [cph] (filled contour code), Paul Murrell [ctb], Stefan Eng [ctb] (violin plot improvements), Achim Zeileis [ctb] (modern colors), Alexandre Courtiol [ctb] (generics for larrows, lpolygon, lrect and lsegments)",
       "Maintainer": "Deepayan Sarkar <deepayan.sarkar@r-project.org>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "lazyeval": {
       "Package": "lazyeval",
@@ -3917,7 +3927,8 @@
       "ByteCompile": "yes",
       "License": "GPL (>= 2)",
       "NeedsCompilation": "yes",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "microbenchmark": {
       "Package": "microbenchmark",
@@ -3946,7 +3957,8 @@
       "NeedsCompilation": "yes",
       "Author": "Olaf Mersmann [aut], Claudia Beleites [ctb], Rainer Hurling [ctb], Ari Friedman [ctb], Joshua M. Ulrich [cre]",
       "Maintainer": "Joshua M. Ulrich <josh.m.ulrich@gmail.com>",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "mime": {
       "Package": "mime",
@@ -3988,8 +4000,9 @@
       ],
       "SystemRequirements": "GNU make",
       "NeedsCompilation": "yes",
-      "Repository": "CRAN",
-      "Author": "Douglas Bates [aut], Katharine M. Mullen [aut, cre], John C. Nash [aut], Ravi Varadhan [aut]"
+      "Repository": "RSPM",
+      "Author": "Douglas Bates [aut], Katharine M. Mullen [aut, cre], John C. Nash [aut], Ravi Varadhan [aut]",
+      "Encoding": "UTF-8"
     },
     "mnormt": {
       "Package": "mnormt",
@@ -4179,7 +4192,8 @@
       "Maintainer": "Paul Gilbert <pgilbert.ttv9z@ncf.ca>",
       "URL": "http://optimizer.r-forge.r-project.org/",
       "NeedsCompilation": "no",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "openssl": {
       "Package": "openssl",
@@ -4579,7 +4593,8 @@
       "SystemRequirements": "libpng",
       "URL": "http://www.rforge.net/png/",
       "NeedsCompilation": "yes",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "polynom": {
       "Package": "polynom",
@@ -4601,7 +4616,8 @@
         "rmarkdown"
       ],
       "VignetteBuilder": "knitr",
-      "Repository": "CRAN"
+      "Repository": "RSPM",
+      "Encoding": "UTF-8"
     },
     "pracma": {
       "Package": "pracma",
@@ -4976,14 +4992,15 @@
         "testthat (>= 3.1.0)"
       ],
       "Config/testthat/edition": "3",
-      "Author": "Gage Rowden [aut, cre] (<https://orcid.org/0000-0002-7517-0480>)",
-      "Maintainer": "Gage Rowden <gage.rowden1145@gmail.com>",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "quicR",
       "RemoteUsername": "gage1145",
       "RemoteRef": "v3.0.4",
-      "RemoteSha": "8bb11a77f0cac8a7ad53732bfd6caf93278153c9"
+      "RemoteSha": "8bb11a77f0cac8a7ad53732bfd6caf93278153c9",
+      "NeedsCompilation": "no",
+      "Author": "Gage Rowden [aut, cre] (<https://orcid.org/0000-0002-7517-0480>)",
+      "Maintainer": "Gage Rowden <gage.rowden1145@gmail.com>"
     },
     "ragg": {
       "Package": "ragg",
