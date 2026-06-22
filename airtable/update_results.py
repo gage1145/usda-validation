@@ -67,33 +67,31 @@ print(f"[bold green]Retrieved {len(airtable_samples)} samples from Airtable.[/bo
 def update_reaction(rxn):
     existing_rxn = rxn in existing_rxn_names
 
-    if existing_rxn: return
-    
-    rxn_split     = rxn.split("_")
-    assay         = rxn_split[rxn.count("_")]
-    date_raw      = rxn_split[0]
-    date_join     = "-".join([date_raw[:4], date_raw[4:6], date_raw[6:8]])
-    date          = datetime.strptime(date_join, "%Y-%m-%d")
-    reader        = rxn_split[1]
-    tech_initials = rxn_split[2]
-    technician    = [Technician.first(formula=tech_formula(tech_initials))]
-    
-    reaction = Reaction(
-        rxn_name    = rxn,
-        assay       = assay,
-        date        = date,
-        technician  = technician,
-        reader      = reader,
-        temperature = 42
-    )
-    return reaction
+    if not existing_rxn:
+        rxn_split     = rxn.split("_")
+        assay         = rxn_split[rxn.count("_")]
+        date_raw      = rxn_split[0]
+        date_join     = "-".join([date_raw[:4], date_raw[4:6], date_raw[6:8]])
+        date          = datetime.strptime(date_join, "%Y-%m-%d")
+        reader        = rxn_split[1]
+        tech_initials = rxn_split[2]
+        technician    = [Technician.first(formula=tech_formula(tech_initials))]
+        
+        reaction = Reaction(
+            rxn_name    = rxn,
+            assay       = assay,
+            date        = date,
+            technician  = technician,
+            reader      = reader,
+            temperature = 42
+        )
+        return reaction
 
 if not skip_reactions: 
-    updated_reactions = list(map(update_reaction, reactions))
-    reactions_to_save = [reaction for reaction in updated_reactions if reaction]
+    reactions_to_save = [rxn for rxn in map(update_reaction, reactions) if rxn]
     if reactions_to_save:
         print(f"\n[bold green]Saving {len(reactions_to_save)} reactions to Airtable...[/bold green]")
-        Reaction.batch_save(updated_reactions)
+        Reaction.batch_save(reactions_to_save)
     else:
         print("[bold yellow]No new reactions to save.[/bold yellow]\n")
 else:
