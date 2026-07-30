@@ -51,22 +51,18 @@ solve_boundary <- function(model, grid_vars, solve_var,
       error = function(e) NA_real_
     )
   })
-  for (i in seq_along(fixed_vars)) {
-    var <- names(fixed_vars)[i]
-    grid[[var]] <- fixed_vars[[i]]
-  }
   grid
 }
 
-n_obs    <- 3
-mpr_seq  <- range(df_ctrl$MPR)
-auc_seq  <- range(df_ctrl$AUC)
+n_obs    <- 2
+mpr_seq  <- seq(min(df_ctrl$MPR), max(df_ctrl$MPR), length.out = n_obs)
+auc_seq  <- seq(min(df_ctrl$AUC), max(df_ctrl$AUC), length.out = n_obs)
 
 # One boundary surface per Assay level
 assay_levels   <- unique(df_ctrl$Assay)
 surface_colors <- c("cyan", "orange")
 
-boundaries <- map_dfr(assay_levels, function(lvl) {
+boundaries <- lapply(assay_levels, function(lvl) {
   solve_boundary(
     model      = multi_mod,
     grid_vars  = list(MPR = range(df_ctrl$MPR), AUC = range(df_ctrl$AUC)),
@@ -76,38 +72,28 @@ boundaries <- map_dfr(assay_levels, function(lvl) {
   )
 })
 
-ms_mat <- t(matrix(boundaries$MS, nrow = n_obs))
+# ms_mat <- t(matrix(boundaries$MS, nrow = n_obs))
 
 # Build plot: add one surface trace per Assay level
 # expand.grid varies MPR fastest, so matrix(, nrow=n_obs) gives [MPR, AUC];
 # add_surface expects z[i,j] = value at x[j], y[i], so transpose.
-plot_ly() %>%
-  # {
-  #   for (i in seq_along(assay_levels)) {
-  #     ms_mat <- t(matrix(boundaries[[i]]$MS, nrow = n_obs))
-  #     plt <- plt %>%
-  #       add_surface(
-  #         x          = mpr_seq,
-  #         y          = auc_seq,
-  #         z          = ms_mat,
-  #         colorscale = list(c(0, surface_colors[i]), c(1, surface_colors[i])),
-  #         opacity    = 0.4,
-  #         showscale  = FALSE,
-  #         name       = assay_levels[i]
-  #       )
-  #   }
-  # } %>%
-  # add_surface(
-  #   data       = boundaries,
-  #   x          = ~MPR,
-  #   y          = ~AUC,
-  #   z          = ~t(matrix(boundaries$MS, nrow = n_obs)),
-  #   color      = ~Assay,
-  #   # colorscale = list(c(0, surface_colors[i]), c(1, surface_colors[i])),
-  #   opacity    = 0.4,
-  #   showscale  = FALSE
-  #   # name       = assay_levels[i]
-  # ) %>%
+plt <- plot_ly() 
+
+for (i in seq_along(assay_levels)) {
+  ms_mat <- t(matrix(boundaries[[i]]$MS, nrow = n_obs))
+  plt <- plt %>%
+    add_surface(
+      x          = mpr_seq,
+      y          = auc_seq,
+      z          = ms_mat,
+      colorscale = list(c(0, surface_colors[i]), c(1, surface_colors[i])),
+      opacity    = 0.4,
+      showscale  = FALSE,
+      name       = assay_levels[i]
+    )
+}
+
+plt %>%
   add_markers(
     data   = df_unknown,
     x = ~MPR, y = ~AUC, z = ~MS,
@@ -116,9 +102,6 @@ plot_ly() %>%
     color  = ~Assay,
     colors = c("#3357FF", "#FF5733"),
     marker = list(
-      # colorscale = c("darkslateblue", "darkorange"),
-      # colorscale = list(c(0, "#3357FF"), c(0.5, "#fcff33"), c(1, "#FF5733")),
-      # colorbar = list(title = "Probability of Positive"),
       size = 4
     )
   ) %>%
