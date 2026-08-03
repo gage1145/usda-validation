@@ -20,7 +20,7 @@ multi_mod <- glm(positive ~ MPR + MS + AUC + Assay, data = df_ctrl, family = "bi
 df_unknown <- df_ %>%
   filter(!(`Sample IDs` %in% c("N", "P"))) %>%
   summarize(across(c(MPR, AUC, MS), median), .by = c(`Sample IDs`, Dilutions, Assay)) %>%
-  add_predictions(mpr_mod, type = "response")
+  add_predictions(multi_mod, type = "response")
 
 
 # Logistic regression -----------------------------------------------------
