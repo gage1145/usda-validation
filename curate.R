@@ -7,12 +7,12 @@ library(arrow)
 main <- function() {
   threshold <- 5
   norm_point <- 8
-  only_new <- as.logical(Sys.getenv("ONLY_NEW"))
+  only_new <- TRUE
 
 
-  user_input <- readline(sprintf("Environment variable 'ONLY_NEW' set to %s. Continue? [Y/n] ", only_new))
+  user_input <- readline("Only new reactions will be updated. Continue [Y] or update all [n]? ")
   user_happy <- tolower(user_input) == "y"
-  if (!user_happy) stop("User stopped execution of curation script.")
+  if (!user_happy) only_new <- FALSE
 
 
   files <- list.files("raw/processedSamples", ".xlsx", full.names = TRUE, recursive = TRUE)
