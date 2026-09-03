@@ -11,6 +11,15 @@ library(airtabler)
 library(janitor)
 library(tidymodels)
 
+main_theme <- theme(
+  plot.title = element_text(size=24, hjust=0.5),
+  axis.title = element_text(size=20),
+  axis.text = element_text(size=12),
+  strip.text = element_text(size=16, face="bold"),
+  legend.title = element_text(size=12),
+  legend.text = element_text(size=12)
+)
+
 
 APP <- "app7KsgYl2jhOnYg7"
 tables <- airtable(APP, c("samples", "animals"))
@@ -142,29 +151,9 @@ df_unknown_sum <- df_unknown %>%
 # Plot this shit ---------------------------------------------------------
 
 
-# assays <- levels(df_$assay)
-# dilutions <- levels(df_$dilutions)
-# sample_types <- levels(df_$sample_type)
-
 combos <- distinct(df_, assay, dilutions, sample_type)
 
 df_pred <- ggpredict(multi_mod, c("mpr [all]", "ms", "auc", "assay", "sample_type"))
-
-# df_pred <- pmap_dfr(
-#   combos,
-#   \(assay, dilutions, sample_type) {
-#     tibble(
-#       mpr = seq(min(df_$mpr), max(df_$mpr), length.out = 100),
-#       ms  = seq(min(df_$ms),  max(df_$ms), length.out = 100),
-#       auc = seq(min(df_$auc), max(df_$auc), length.out = 100),
-#       assay = assay,
-#       dilutions = dilutions,
-#       sample_type = sample_type
-#     ) %>%
-#       add_predictions(multi_mod, type = "response")
-#   }
-# )
-
 
 plts <- map(levels(df_$sample_type), function(type) {
   df_pred %>%
@@ -204,4 +193,75 @@ ggarrange(plotlist = plts, nrow = 2, ncol = 2, common.legend = TRUE, legend = "r
 
 ggsave(filename = "logistic_regression.png", path = "figures/tissues", width = 24, height = 16, bg = "white")
 
-  
+# Explanation for log scaling
+df_cor <- df_ctrl_sum %>%
+  select(mpr, ms, auc, positive) %>%
+  rename_with(~ paste0("log_", .), c(mpr, ms, auc)) %>%
+  mutate(
+    mpr = exp(log_mpr),
+    ms = exp(log_ms),
+    auc = exp(log_auc),
+    positive = ifelse(positive == 0, "Negative", "Positive")
+  ) 
+
+metric_combos <- c("mpr", "ms", "auc") %>%
+  combn(2) %>%
+  t() %>%
+  as.data.frame() %>%
+  rename(x = 1, y = 2) %>%
+  bind_rows(
+    mutate(
+      ., 
+      across(everything(), ~ paste0("log_", .x)), 
+      .keep = "unused"
+    )
+  )
+
+make_cor_plot <- function(df, x, y, group, alpha = 0.1) {
+  df %>%
+    ggplot(aes(.data[[x]], .data[[y]])) +
+    geom_point(aes(color = .data[[group]]), alpha = alpha) +
+    scale_color_manual(values = c("navy", "red")) +
+    labs(
+      x = toupper(x),
+      y = toupper(y),
+      color = str_to_title(group)
+    ) +
+    guides(color = guide_legend(override.aes = list(alpha = 1, size = 6, shape = "square"))) +
+    main_theme +
+    theme(
+      legend.title = element_blank(),
+      legend.text = element_text(size = 24),
+      legend.key = element_rect(fill = "white", color = "white"),
+    )
+}
+
+cor_plots <- pmap(
+  metric_combos, 
+  make_cor_plot, 
+  df = df_cor, 
+  group = "positive",
+  alpha = 0.25
+)
+
+ggarrange(
+  plotlist = cor_plots, align = "hv", legend="bottom", 
+  common.legend = TRUE, font.label = list(size = 30)
+) %>%
+  annotate_figure(
+    top = text_grob(
+      "Metric Correlation", 
+      color = "black", 
+      face = "bold", 
+      size = 30
+    ),
+    left = text_grob(
+      "Log-transformed         |         Untransformed", 
+      color = "black", 
+      face = "bold", 
+      size = 30, 
+      rot=90
+    )
+)
+
+ggsave("corplot.png", path = "figures/tissues", width = 16, height = 12, bg = "white")
