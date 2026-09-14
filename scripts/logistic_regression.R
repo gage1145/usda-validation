@@ -10,6 +10,7 @@ library(ggpubr)
 library(airtabler)
 library(janitor)
 library(tidymodels)
+library(lme4)
 
 main_theme <- theme(
   plot.title = element_text(size=24, hjust=0.5),
@@ -22,29 +23,41 @@ main_theme <- theme(
 
 
 APP <- "app7KsgYl2jhOnYg7"
-tables <- airtable(APP, c("samples", "animals"))
+tables <- airtable(APP, c("samples", "animals", "reactions"))
 samples <- tables$samples$select_all()
 animals <- tables$animals$select_all()
+reactions <- tables$reactions$select_all()
 
 df_animals <- animals %>%
   clean_names() %>%
   select(animal_id, group)
 
 df_samples <- samples %>%
-  rename() %>%
-  select(2:8) %>%
+  rename(rxn_id = reactions) %>%
+  select(-c("id", "results", "concentration", "technician_id", "sample_type_id", "animal", "createdTime")) %>%
   unnest(where(is.list)) %>%
   filter(
     sample_type %in% c("RAMALT", "obex", "RPLN", "PLN")
   ) %>%
   left_join(df_animals, by = "animal_id")
 
-df_ <- read_parquet("data/processedSamples/calcs.parquet") %>%
+df_reactions <- reactions %>%
+  clean_names() %>%
+  rename(rxn_id = id, reaction = rxn_name) %>%
+  select(rxn_id, reaction, technician, assay, reader, date) %>%
+  unnest(where(is.list))
+
+df_samples %<>% left_join(df_reactions, by = "rxn_id")
+
+df_results <- read_parquet("data/processedSamples/calcs.parquet") %>%
   clean_names(replace = c("Sample IDs" = "sample_id", "TtT" = "ttt")) %>%
-  mutate(across(c(mpr, ms, auc), log)) %>%
-  inner_join(df_samples, by = "sample_id") %>%
+  mutate(across(c(mpr, ms, auc), log)) 
+
+df_ <- df_results %>%
+  inner_join(df_samples, by=c("sample_id", "reaction", "assay")) %>%
+  rename(process_tech = tech_name, rxn_tech = technician) %>%
   mutate(
-    across(c(sample_type, animal_id, mortem, group, assay, wells), as.factor)
+    across(c(sample_type, animal_id, mortem, group, assay, wells, process_tech, rxn_tech, reader), as.factor)
   )
 
 df_ctrl <- df_ %>%
@@ -54,98 +67,27 @@ df_unknown <- df_ %>%
   setdiff(df_ctrl)
 
 df_ctrl_sum <- df_ctrl %>%
-  summarize(across(c(mpr, ms, auc), median), .by = c(sample_id, dilutions, reaction, assay, sample_type, mortem, group, mpi)) %>%
+  summarize(
+    across(c(mpr, ms, auc), median), 
+    .by = c(sample_id, dilutions, reaction, assay, sample_type, mortem, group, mpi, process_tech, rxn_tech, reader)
+  ) %>%
   mutate(
     positive = as.integer(group != "Negative Control")
   )
 
-multi_mod <- glm(positive ~ mpr + ms + auc + dilutions + assay + sample_type, data = df_ctrl_sum, family = "binomial")
+multi_mod <- glm(
+  positive ~ mpr + ms + auc + dilutions + assay + sample_type,
+  data = df_ctrl_sum, 
+  family = "binomial",
+)
+summary(multi_mod)
 
 df_unknown_sum <- df_unknown %>%
-  summarize(across(c(mpr, ms, auc), median), .by = c(sample_id, dilutions, assay, sample_type)) %>%
-  add_predictions(multi_mod, type = "response")
-
-
-# Numerically solve the decision boundary via root-finding.
-# Works with any model (categorical predictors, interactions, etc.) because
-# it calls predict() directly rather than manipulating coefficients.
-#
-# For each (MPR, AUC) row in the grid and each combination of fixed_vars,
-# uniroot finds the value of solve_var where p = p_target.
-# solve_boundary <- function(model, grid_vars, solve_var,
-#                            fixed_vars = list(), n_obs = 100, p_target = 0.5) {
-#   seqs <- lapply(grid_vars, function(rng) seq(rng[1], rng[2], length.out = n_obs))
-#   grid <- do.call(expand.grid, seqs)
-#   interval <- range(model$model[[solve_var]], na.rm = TRUE)
-
-#   grid[[solve_var]] <- apply(grid, 1, function(row) {
-#     tryCatch(
-#       uniroot(function(v) {
-#         nd <- as.data.frame(c(as.list(row), setNames(list(v), solve_var), fixed_vars))
-#         predict(model, newdata = nd, type = "response") - p_target
-#       }, interval = interval)$root,
-#       error = function(e) NA_real_
-#     )
-#   })
-#   grid
-# }
-
-# n_obs    <- 2
-# mpr_seq  <- seq(min(df_ctrl_sum$mpr), max(df_ctrl_sum$mpr), length.out = n_obs)
-# auc_seq  <- seq(min(df_ctrl_sum$auc), max(df_ctrl_sum$auc), length.out = n_obs)
-
-# # One boundary surface per Assay level
-# assay_levels   <- unique(df_ctrl_sum$assay)
-# surface_colors <- c("cyan", "orange")
-
-# boundaries <- lapply(assay_levels, function(lvl) {
-#   solve_boundary(
-#     model      = multi_mod,
-#     grid_vars  = list(mpr = range(df_ctrl_sum$mpr), auc = range(df_ctrl_sum$auc)),
-#     solve_var  = "ms",
-#     fixed_vars = list(assay = lvl),
-#     n_obs      = n_obs
-#   )
-# })
-
-# plt <- plot_ly() 
-
-# for (i in seq_along(assay_levels)) {
-#   ms_mat <- t(matrix(boundaries[[i]]$ms, nrow = n_obs))
-#   plt <- plt %>%
-#     add_surface(
-#       x          = mpr_seq,
-#       y          = auc_seq,
-#       z          = ms_mat,
-#       colorscale = list(c(0, surface_colors[i]), c(1, surface_colors[i])),
-#       opacity    = 0.4,
-#       showscale  = FALSE,
-#       name       = assay_levels[i]
-#     )
-# }
-
-# plt %>%
-#   add_markers(
-#     data   = df_unknown,
-#     x = ~mpr, y = ~auc, z = ~ms,
-#     type   = "scatter3d",
-#     mode   = "markers",
-#     color  = ~assay,
-#     colors = c("#3357FF", "#FF5733"),
-#     marker = list(
-#       size = 4
-#     )
-#   ) %>%
-#   layout(
-#     title = "Logistic Regression Decision Boundary (P = 0.5) in MPR \u00d7 AUC \u00d7 MS Space",
-#     scene = list(
-#       aspectmode = "cube",
-#       xaxis = list(title = "mpr"),
-#       yaxis = list(title = "auc"),
-#       zaxis = list(title = "ms")
-#     )
-#   )
-
+  summarize(
+    across(c(mpr, ms, auc), median), 
+    .by = c(sample_id, dilutions, reaction, assay, sample_type, mortem, group, mpi, process_tech, rxn_tech, reader)
+  ) %>%
+  add_predictions(multi_mod, type = "response") 
 
 
 # Plot this shit ---------------------------------------------------------
@@ -265,3 +207,19 @@ ggarrange(
 )
 
 ggsave("corplot.png", path = "figures/tissues", width = 16, height = 12, bg = "white")
+
+
+
+# Apply to unknown data --------------------------------------------------
+
+
+df_unknown_sum %>%
+  # add_predictions(multi_mod, type = "response") %>%
+  # mutate(mpi = as.factor(mpi)) %>%
+  ggplot(aes(mpi, pred, color=group, fill=group)) +
+  # geom_boxplot() +
+  geom_point(position = position_jitterdodge(jitter.width = 3, dodge.width = 3)) +
+  stat_smooth(se = TRUE) +
+  facet_grid(dilutions ~ assay) +
+  scale_color_manual(values = c("navy", "red")) +
+  scale_fill_manual(values = c("navy", "red")) 
