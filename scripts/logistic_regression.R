@@ -10,7 +10,10 @@ library(ggpubr)
 library(airtabler)
 library(janitor)
 library(tidymodels)
-library(lme4)
+library(car)
+library(pROC)
+library(latex2exp)
+
 
 main_theme <- theme(
   plot.title = element_text(size=24, hjust=0.5),
@@ -20,6 +23,9 @@ main_theme <- theme(
   legend.title = element_text(size=12),
   legend.text = element_text(size=12)
 )
+
+
+# Load data --------------------------------------------------------------
 
 
 APP <- "app7KsgYl2jhOnYg7"
@@ -57,7 +63,7 @@ df_ <- df_results %>%
   inner_join(df_samples, by=c("sample_id", "reaction", "assay")) %>%
   rename(process_tech = tech_name, rxn_tech = technician) %>%
   mutate(
-    across(c(sample_type, animal_id, mortem, group, assay, wells, process_tech, rxn_tech, reader), as.factor)
+    across(c(sample_type, animal_id, dilutions, mortem, group, assay, wells, process_tech, rxn_tech, reader), as.factor)
   )
 
 df_ctrl <- df_ %>%
@@ -75,12 +81,194 @@ df_ctrl_sum <- df_ctrl %>%
     positive = as.integer(group != "Negative Control")
   )
 
+# ROC Analysis -----------------------------------------------------------
+
+
+
+df_ctrl_sum_long <- df_ctrl_sum %>%
+  pivot_longer(
+    cols = c(mpr, ms, auc),
+    names_to = "metric",
+    values_to = "value"
+  )
+
+pca_res <- prcomp(~ mpr + ms + auc, data = df_ctrl_sum)
+summary(pca_res)
+df_ctrl_sum$pc1 <- pca_res$x[,1]
+
+get_roc <- function(df, dilutions, assay, sample_type, ...) {
+  temp_df <- df %>%
+    filter(dilutions == !!dilutions, assay == !!assay, sample_type == !!sample_type)
+
+  tryCatch({
+      temp_roc <- roc(positive ~ pc1, data = temp_df, ci = TRUE)
+      temp_roc$assay <- assay
+      temp_roc$sample_type <- sample_type
+      temp_roc$dilutions <- dilutions
+      return(temp_roc)
+    },
+    error = function(e) return(NULL)
+  )
+}
+
+combos <- distinct(df_ctrl_sum, dilutions, assay, sample_type)
+
+rocs <- pmap(combos, get_roc, df = df_ctrl_sum, .progress = TRUE)
+df_rocs <- rocs %>%
+  map_dfr(function(x) {
+    tibble(
+      sensitivity = list(x$sensitivities),
+      specificity = list(x$specificities),
+      lower = x$ci[1],
+      area = x$ci[2],
+      upper = x$ci[3],
+      assay = x$assay,
+      sample_type = x$sample_type,
+      dilutions = x$dilutions
+    )
+  }) %>%
+  mutate(
+    label_y = ifelse(assay == "RT-QuIC", 0.4, 0.25),
+    dilutions = factor(
+      dilutions, 
+      levels = c("-4", "-3", "-2"), 
+      labels = latex2exp::TeX(paste0("$10^{", c("-4", "-3", "-2"), "}$"))
+    )
+  ) %>%
+  filter(!is.na(area))
+
+df_roc_long <- df_rocs %>%
+  select(assay, dilutions, sample_type, sensitivity, specificity) %>%
+  unnest(where(is.list)) %>%
+  arrange(desc(specificity), sensitivity)
+
+# ROC Curves
+roc_plot <- ggplot(df_rocs) +
+  geom_line(
+    aes(x = 1 - specificity, y = sensitivity, color = assay),
+    data = df_roc_long
+  ) +
+  geom_area(
+    aes(x = 1 - specificity, y = sensitivity, fill = assay),
+    data = df_roc_long,
+    linejoin = "mitre", position = "identity", alpha = 0.2, show.legend=FALSE
+  ) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  geom_label(
+    aes(x = 0.65, y = label_y, label = paste(assay, "=", signif(area, 3)), color = assay),
+    hjust = 0, label.padding = unit(0.5, "lines"), show.legend = FALSE
+  ) +
+  facet_grid(sample_type ~ dilutions, labeller = label_parsed) +
+  scale_color_manual(values = c("red", "navy")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.25)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25), position = "right") +
+  coord_equal() +
+  # coord_cartesian(expand=FALSE) +
+  labs(
+    x = "1 - Specificity",
+    y = "Sensitivity",
+  ) +
+  guides(color = guide_legend(override.aes = list(linewidth = 6))) +
+  main_theme +
+  theme(
+    plot.title = element_text(size = 24, hjust = 0.5),
+    axis.title = element_text(size = 20),
+    axis.title.y = element_text(vjust = 1),
+    axis.text = element_text(size = 16),
+    strip.text = element_text(size = 20, face = "bold"),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 20),
+    legend.position = "inside",
+    legend.position.inside = c(0.05, 0.95),
+    legend.key.spacing.y = unit(0.5, "cm"),
+    legend.background = element_blank(),
+  )
+roc_plot
+
+# AUC Plot
+auc_plot <- df_rocs %>%
+  mutate(title = "AUC") %>%
+  ggplot(aes(dilutions, area, color = assay, ymax = upper, ymin = lower)) +
+  geom_point(position = position_dodge(width = 0.5), size = 6) +
+  geom_errorbar(position = position_dodge(width = 0.5), width = 0.2) +
+  facet_grid(rows=vars(sample_type), cols=vars(title), labeller = label_parsed, space = "free", scales = "free_x") +
+  # scale_y_continuous(breaks = seq(0, 1, by = 0.2), limits = c(0, 1)) +
+  scale_color_manual(values = c("red", "navy", "darkgreen")) +
+  scale_x_discrete(labels = label_parse()) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.2), limits = c(NA, 1)) +
+  # coord_flip() +
+  # coord_cartesian(ylim = c(0.5, 1)) +
+  labs(
+    x = "Log10 Dilution Factor",
+    y = "Area Under the Curve",
+    color = ""
+  ) +
+  guides(color = guide_legend(override.aes = list(linewidth = 6))) +
+  main_theme +
+  theme(
+    plot.title = element_text(size = 24, hjust = 0.5),
+    axis.title = element_text(size = 20),
+    axis.text = element_text(size = 16),
+    # strip.text = element_text(size = 20, face = "bold"),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 20),
+    legend.position = "inside",
+    legend.position.inside = c(0.05, 0.95),
+    legend.key.spacing.y = unit(0.5, "cm"),
+    legend.key.spacing.x = unit(1.5, "cm"),
+    legend.background = element_blank(),
+    strip.text = element_blank()
+  )
+auc_plot
+
+ggarrange(
+  auc_plot, roc_plot, ncol = 2, common.legend = TRUE, widths = c(1, 1.5), align = "h",
+  legend = "bottom"
+)
+
+ggsave("roc1.png", path = "figures/tissues", width = 12, height = 8)
+
+best_performers <- df_rocs %>%
+  filter(area == max(area), .by = c(sample_type))
+
+
+# Logistic Model ---------------------------------------------------------
+
+
 multi_mod <- glm(
-  positive ~ mpr + ms + auc + dilutions + assay + sample_type,
+  positive ~ mpr + ms + auc + ms:auc + dilutions + assay + sample_type,
   data = df_ctrl_sum, 
   family = "binomial",
 )
 summary(multi_mod)
+
+best_aic_model <- stats::step(multi_mod, direction = "both")
+summary(best_aic_model)
+
+# Predictors with the lowest p-values contribute the most unique information to 
+# the theoretical framework.
+Anova(multi_mod, type = "III", test.statistic = "LR")
+
+odds_ratios <- exp(cbind(OR = coef(multi_mod), confint(multi_mod)))
+print(odds_ratios)
+
+odds_ratios %>%
+  as_tibble() %>%
+  mutate(
+    across(everything(), log),
+    effect = (rownames(odds_ratios))
+  ) %>%
+  arrange(OR) %>%
+  ggplot(aes(fct_inorder(effect), OR)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point() +
+  geom_errorbar(aes(ymin = `2.5 %`, ymax = `97.5 %`)) +
+  labs(
+    x = "",
+    y = "Log Odds Ratio"
+  )
+
+vif(multi_mod)
 
 df_unknown_sum <- df_unknown %>%
   summarize(
