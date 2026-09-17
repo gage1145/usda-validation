@@ -2,10 +2,7 @@ library(tidyverse)
 library(quicR)
 library(arrow)
 library(magrittr)
-library(modelr)
 library(plotly)
-library(emmeans)
-library(ggeffects)
 library(ggpubr)
 library(airtabler)
 library(janitor)
@@ -13,6 +10,10 @@ library(tidymodels)
 library(car)
 library(pROC)
 library(latex2exp)
+library(glmnet)
+library(ranger)
+library(kernlab)
+library(themis)
 
 
 main_theme <- theme(
@@ -63,7 +64,7 @@ df_ <- df_results %>%
   inner_join(df_samples, by=c("sample_id", "reaction", "assay")) %>%
   rename(process_tech = tech_name, rxn_tech = technician) %>%
   mutate(
-    across(c(sample_type, animal_id, dilutions, mortem, group, assay, wells, process_tech, rxn_tech, reader), as.factor)
+    across(c(sample_type, animal_id, dilutions, mortem, assay, wells, process_tech, rxn_tech, reader), as.factor)
   )
 
 df_ctrl <- df_ %>%
@@ -235,103 +236,212 @@ best_performers <- df_rocs %>%
 # Logistic Model ---------------------------------------------------------
 
 
-multi_mod <- glm(
-  positive ~ mpr + ms + auc + ms:auc + dilutions + assay + sample_type,
-  data = df_ctrl_sum, 
-  family = "binomial",
-)
-summary(multi_mod)
+# yardstick treats the first factor level as the "positive" event by default.
+# Our factor is c("Negative", "Positive"), so without this, roc_auc etc. would
+# measure performance at predicting "Negative". This flips the event to "Positive".
+options(yardstick.event_first = FALSE)
 
-best_aic_model <- stats::step(multi_mod, direction = "both")
-summary(best_aic_model)
+# tidymodels classification requires a factor outcome; glm() accepted integers.
+df_ctrl_sum <- df_ctrl_sum |>
+  mutate(positive = factor(positive, levels = c(0, 1), labels = c("Negative", "Positive")))
 
-# Predictors with the lowest p-values contribute the most unique information to 
-# the theoretical framework.
-Anova(multi_mod, type = "III", test.statistic = "LR")
+# 5-fold CV repeated 3 times produces 15 assessment sets, giving stable metric
+# estimates. strata = positive ensures each fold preserves the class ratio.
+# Bootstraps are used instead if the dataset is too small for 5-fold splitting.
+set.seed(42)
+if (nrow(df_ctrl_sum) < 60) {
+  folds <- bootstraps(df_ctrl_sum, times = 25, strata = positive)
+} else {
+  folds <- vfold_cv(df_ctrl_sum, v = 5, repeats = 3, strata = positive)
+}
 
-odds_ratios <- exp(cbind(OR = coef(multi_mod), confint(multi_mod)))
-print(odds_ratios)
+# Check class balance before building the recipe. If one class has 3x as many
+# samples as the other, add SMOTE to the recipe to oversample the minority class.
+class_counts <- count(df_ctrl_sum, positive)
+imbalance_ratio <- max(class_counts$n) / min(class_counts$n)
 
-odds_ratios %>%
-  as_tibble() %>%
-  mutate(
-    across(everything(), log),
-    effect = (rownames(odds_ratios))
-  ) %>%
-  arrange(OR) %>%
-  ggplot(aes(fct_inorder(effect), OR)) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_point() +
-  geom_errorbar(aes(ymin = `2.5 %`, ymax = `97.5 %`)) +
-  labs(
-    x = "",
-    y = "Log Odds Ratio"
+# A recipe is a preprocessing blueprint applied consistently within each CV fold
+# (preventing data leakage from the assessment set into the analysis set).
+base_recipe <- recipe(positive ~ mpr + ms + auc + dilutions + assay + sample_type,
+                      data = df_ctrl_sum) |>
+  # Remove any predictor with zero variance (e.g., a single reader in a fold).
+  step_zv(all_predictors()) |>
+  # Center and scale numeric predictors. Required for glmnet's L1/L2 penalty to
+  # treat predictors fairly, and for the SVM's RBF kernel distance to be meaningful.
+  step_normalize(all_numeric_predictors()) |>
+  # One-hot encode factors (dilutions, assay, sample_type) into numeric columns.
+  step_dummy(all_nominal_predictors()) |>
+  # Add an ms x auc interaction term. Both metrics capture kinetic curve shape
+  # and are correlated, so their interaction captures a non-additive effect.
+  step_interact(terms = ~ mpr:ms:auc)
+
+# SMOTE generates synthetic minority-class samples by interpolating between real
+# ones in feature space. over_ratio = 0.8 upsamples to 80% of the majority count
+# (less aggressive than 1:1, reducing the risk of overfitting on synthetic data).
+if (imbalance_ratio > 3) {
+  base_recipe <- base_recipe |> step_smote(positive, over_ratio = 0.8)
+}
+
+# Elastic net: penalty (lambda) controls regularization strength; mixture (alpha)
+# blends L1 (lasso, alpha=1) and L2 (ridge, alpha=0). tune() marks them as
+# hyperparameters to be searched over a grid.
+lr_spec <- logistic_reg(penalty = tune(), mixture = tune()) |>
+  set_engine("glmnet") |>
+  set_mode("classification")
+
+# Random forest: mtry = predictors sampled per split (tuned); trees = 500 is
+# fixed for stability; min_n = minimum node size before splitting (tuned).
+# probability = TRUE tells ranger to output class probabilities, required for roc_auc.
+rf_spec <- rand_forest(mtry = tune(), trees = 500, min_n = tune()) |>
+  set_engine("ranger", importance = "impurity", probability = TRUE) |>
+  set_mode("classification")
+
+# SVM with RBF kernel: cost (C) penalizes margin violations; rbf_sigma (gamma)
+# controls kernel width. High gamma = tight fit around each training point (risk
+# of overfitting); low gamma = broader, smoother influence.
+svm_spec <- svm_rbf(cost = tune(), rbf_sigma = tune()) |>
+  set_engine("kernlab") |>
+  set_mode("classification")
+
+# workflow_set crosses the one recipe with the three model specs, producing
+# base_logistic, base_rf, and base_svm workflows.
+# option_add attaches a per-workflow tuning grid:
+#   - Logistic: 100-point regular grid (10 levels each for penalty and mixture),
+#     spanning penalty 1e-4 to 1e0 on a log scale.
+#   - RF/SVM: 20-point Latin hypercube, a space-filling design that covers the
+#     parameter space evenly without the exponential blowup of a full grid.
+wf_set <- workflow_set(
+  preproc = list(base = base_recipe),
+  models  = list(logistic = lr_spec, rf = rf_spec, svm = svm_spec)
+) |>
+  option_add(
+    grid = grid_regular(penalty(range = c(-4, 0)), mixture(), levels = 10),
+    id = "base_logistic"
+  ) |>
+  option_add(
+    grid = grid_latin_hypercube(mtry(range = c(1, 9)), min_n(), size = 20),
+    id = "base_rf"
+  ) |>
+  option_add(
+    grid = grid_latin_hypercube(cost(), rbf_sigma(), size = 20),
+    id = "base_svm"
   )
 
-vif(multi_mod)
+# roc_auc is the primary ranking metric. pr_auc (precision-recall AUC) is more
+# informative than roc_auc under class imbalance. 
+# j_index (Youden's J = sensitivity + specificity - 1) summarizes the ROC curve 
+# at its optimal threshold.
+diag_metrics <- metric_set(roc_auc, pr_auc, j_index, sensitivity, specificity)
 
-df_unknown_sum <- df_unknown %>%
-  summarize(
-    across(c(mpr, ms, auc), median), 
-    .by = c(sample_id, dilutions, reaction, assay, sample_type, mortem, group, mpi, process_tech, rxn_tech, reader)
-  ) %>%
-  add_predictions(multi_mod, type = "response") 
+# Parallelise across all cores minus one. Tuning is embarrassingly parallel over
+# folds x parameter combinations, so this can cut runtime by 4-8x.
+doParallel::registerDoParallel(parallel::detectCores() - 1)
+
+# workflow_map runs tune_grid on every workflow using the per-workflow grids set
+# above. save_pred = TRUE stores held-out predictions from each fold, which are
+# needed to compute roc_auc and pr_auc (both require predicted probabilities).
+# parallel_over = "everything" parallelises across both resamples and grid points.
+tuned_results <- wf_set |>
+  workflow_map(
+    fn        = "tune_grid",
+    resamples = folds,
+    metrics   = diag_metrics,
+    control   = control_grid(save_pred = TRUE, parallel_over = "everything"),
+    verbose   = TRUE
+  )
+
+# Summarise the best CV roc_auc for each workflow and rank them. The dot-plot
+# from autoplot shows whether one model family is clearly superior or if the
+# three models are within noise of each other.
+rank_results(tuned_results, rank_metric = "roc_auc", select_best = TRUE) |>
+  select(model, .metric, mean) |>
+  pivot_wider(id_cols = c(model), names_from = .metric, values_from = c(mean))
+
+autoplot(tuned_results, metric = "roc_auc") +
+  main_theme +
+  labs(title = "Model Comparison: ROC AUC")
+ggsave("model_comparison.png", path = "figures/tissues", width = 10, height = 6)
+
+# Programmatically select the winning workflow ID (e.g., "base_rf") and the
+# specific hyperparameter combination within it that had the best mean CV roc_auc.
+best_wf_id <- rank_results(tuned_results, rank_metric = "roc_auc") |>
+  filter(.metric == "roc_auc") |>
+  slice_min(rank, n = 1) |>
+  pull(wflow_id)
+
+best_params <- tuned_results |>
+  extract_workflow_set_result(id = best_wf_id) |>
+  select_best(metric = "roc_auc")
+
+# finalize_workflow replaces the tune() placeholders with the best found values.
+# fit() then trains on the entire labelled dataset. CV was only for hyperparameter
+# selection and generalisation estimation; the final model uses all available data.
+final_wf  <- tuned_results |>
+  extract_workflow(id = best_wf_id) |>
+  finalize_workflow(best_params)
+
+final_fit <- final_wf |> fit(data = df_ctrl_sum)
+
+# Print the CV performance summary for the winning model: mean and standard error
+# of each metric across all folds. These are honest out-of-sample estimates.
+tuned_results |>
+  extract_workflow_set_result(id = best_wf_id) |>
+  collect_metrics() |>
+  filter(.metric %in% c("roc_auc", "pr_auc", "j_index", "sensitivity", "specificity")) |>
+  print(n=Inf)
+
+# Variable importance is only meaningful for tree-based models. glmnet has
+# coefficients and SVM has support vectors, neither of which vip plots the same way.
+if (grepl("rf", best_wf_id)) {
+  final_fit |>
+    extract_fit_parsnip() |>
+    vip()
+  ggsave("variable_importance.png", path = "figures/tissues", width = 8, height = 6)
+}
 
 
-# Plot this shit ---------------------------------------------------------
+# Plot predictions -------------------------------------------------------
 
 
-combos <- distinct(df_, assay, dilutions, sample_type)
+pred_grid <- df_ctrl_sum |>
+  group_by(assay, sample_type) |>
+  tidyr::expand(
+    mpr = seq(min(mpr), max(mpr), length.out = 50),
+    ms  = quantile(ms,  c(0.25, 0.5, 0.75)),
+    auc = quantile(auc, c(0.25, 0.5, 0.75)),
+    dilutions = levels(dilutions)
+  )
 
-df_pred <- ggpredict(multi_mod, c("mpr [all]", "ms", "auc", "assay", "sample_type"))
+pred_grid <- augment(final_fit, new_data = pred_grid)
 
-plts <- map(levels(df_$sample_type), function(type) {
-  df_pred %>%
-    as.data.frame() %>%
-    mutate(facet = paste("log(AUC) =", as.character(facet))) %>% 
-    filter(grid == type) %>%
-    ggplot(aes(x, predicted, color = group, fill = group)) +
+plts <- map(levels(df_ctrl_sum$sample_type), function(type) {
+  pred_grid |>
+    filter(sample_type == type) |>
+    mutate(facet = paste("log(AUC) =", round(auc, 2))) |>
+    ggplot(aes(mpr, .pred_Positive, color = factor(round(ms, 2)), fill = factor(round(ms, 2)))) +
     geom_line(linewidth = 1) +
-    geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2, color = NA) +
-    facet_grid(panel ~ facet) +
-    labs(
-      x = "",
-      y = "",
-      color = "log(MS)", 
-      fill = "log(MS)",
-      title = toupper(type)
-    ) +
-    guides(fill = guide_legend(override.aes = list(alpha = 1))) +
-    theme(
-      strip.text = element_text(size = 24),
-      legend.title = element_text(size = 24),
-      legend.text = element_text(size = 16),
-      legend.key.height = unit(1, "cm"),
-      legend.key.spacing.y = unit(0.5, "cm"),
-      axis.text = element_text(size = 16),
-      axis.title = element_text(size = 24, hjust = 0.5),
-      plot.title = element_text(size = 24, hjust = 0.5),
-    )
-  }
-)
+    facet_grid(dilutions ~ facet) +
+    labs(x = "log(MPR)", y = "P(Positive)", color = "log(MS)", fill = "log(MS)",
+         title = toupper(type)) +
+    main_theme
+})
 
-ggarrange(plotlist = plts, nrow = 2, ncol = 2, common.legend = TRUE, legend = "right") %>%
+ggarrange(plotlist = plts, nrow = 2, ncol = 2, common.legend = TRUE, legend = "right") |>
   annotate_figure(
     bottom = text_grob("log(MPR)", size = 24, vjust = 0),
-    left = text_grob("Probability Positive", rot = 90, size = 24, vjust = 1)
-  ) 
-
-ggsave(filename = "logistic_regression.png", path = "figures/tissues", width = 24, height = 16, bg = "white")
+    left   = text_grob("Probability Positive", rot = 90, size = 24, vjust = 1)
+  )
+ggsave("logistic_regression.png", path = "figures/tissues", width = 24, height = 16, bg = "white")
 
 # Explanation for log scaling
 df_cor <- df_ctrl_sum %>%
-  select(mpr, ms, auc, positive) %>%
+  select(mpr, ms, auc, positive, assay) %>%
   rename_with(~ paste0("log_", .), c(mpr, ms, auc)) %>%
   mutate(
     mpr = exp(log_mpr),
     ms = exp(log_ms),
     auc = exp(log_auc),
-    positive = ifelse(positive == 0, "Negative", "Positive")
+    positive = as.character(positive)
   ) 
 
 metric_combos <- c("mpr", "ms", "auc") %>%
@@ -347,17 +457,22 @@ metric_combos <- c("mpr", "ms", "auc") %>%
     )
   )
 
-make_cor_plot <- function(df, x, y, group, alpha = 0.1) {
+make_cor_plot <- function(df, x, y, color_group, shape_group, alpha = 0.1) {
   df %>%
     ggplot(aes(.data[[x]], .data[[y]])) +
-    geom_point(aes(color = .data[[group]]), alpha = alpha) +
+    geom_point(aes(color = .data[[color_group]], shape = .data[[shape_group]]), alpha = alpha, size=3) +
     scale_color_manual(values = c("navy", "red")) +
+    scale_shape_manual(values = c(1, 2)) +
     labs(
       x = toupper(x),
       y = toupper(y),
-      color = str_to_title(group)
+      color = str_to_title(color_group),
+      shape = str_to_title(shape_group)
     ) +
-    guides(color = guide_legend(override.aes = list(alpha = 1, size = 6, shape = "square"))) +
+    guides(
+        color = guide_legend(override.aes = list(alpha = 1, size = 6, shape = "square")),
+        shape = guide_legend(override.aes = list(alpha = 1, size = 6))
+    ) +
     main_theme +
     theme(
       legend.title = element_blank(),
@@ -370,8 +485,9 @@ cor_plots <- pmap(
   metric_combos, 
   make_cor_plot, 
   df = df_cor, 
-  group = "positive",
-  alpha = 0.25
+  color_group = "positive",
+  shape_group = "assay",
+  alpha = 0.5
 )
 
 ggarrange(
@@ -401,13 +517,33 @@ ggsave("corplot.png", path = "figures/tissues", width = 16, height = 12, bg = "w
 # Apply to unknown data --------------------------------------------------
 
 
-df_unknown_sum %>%
-  # add_predictions(multi_mod, type = "response") %>%
-  # mutate(mpi = as.factor(mpi)) %>%
-  ggplot(aes(mpi, pred, color=group, fill=group)) +
-  # geom_boxplot() +
-  geom_point(position = position_jitterdodge(jitter.width = 3, dodge.width = 3)) +
-  stat_smooth(se = TRUE) +
-  facet_grid(dilutions ~ assay) +
+df_unknown_sum <- df_unknown |>
+  summarize(
+    across(c(mpr, ms, auc), median),
+    .by = c(sample_id, dilutions, reaction, assay, sample_type, mortem, group, mpi, process_tech, rxn_tech, reader)
+  )
+
+df_unknown_preds <- augment(final_fit, new_data = df_unknown_sum)
+
+positioning <- position_jitterdodge(jitter.width = 3, dodge.width = 3, seed = 45)
+
+df_unknown_preds |>
+  # filter()
+  # summarize(
+  #   stdev = sd(.pred_Positive),
+  #   .pred_Positive = mean(.pred_Positive),
+  #   .by = c(mpi, assay, dilutions, group)
+  # ) |> 
+  arrange(mpi) |>
+  mutate(mpi = as.factor(mpi)) |>
+  ggplot(aes(mpi, .pred_Positive, color = group, fill = group)) +
+  geom_boxplot() +
+  # geom_point(position = positioning) +
+  # geom_ribbon(aes(ymin = .pred_Positive - stdev, ymax = .pred_Positive + stdev), position = positioning, width = 0.2) +
+  # geom_line(position = positioning) +
+  # stat_smooth(se = TRUE) +
+  # facet_grid(dilutions ~ assay) +
   scale_color_manual(values = c("navy", "red")) +
-  scale_fill_manual(values = c("navy", "red")) 
+  scale_fill_manual(values = c("navy", "red")) +
+  labs(y = "P(Positive)", x = "MPI") +
+  main_theme
