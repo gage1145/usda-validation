@@ -25,6 +25,8 @@ main_theme <- theme(
   legend.text = element_text(size=12)
 )
 
+tidymodels::tidymodels_prefer()
+
 
 # Load data --------------------------------------------------------------
 
@@ -64,7 +66,7 @@ df_ <- df_results %>%
   inner_join(df_samples, by=c("sample_id", "reaction", "assay")) %>%
   rename(process_tech = tech_name, rxn_tech = technician) %>%
   mutate(
-    across(c(sample_type, animal_id, dilutions, mortem, assay, wells, process_tech, rxn_tech, reader), as.factor)
+    across(c(sample_type, animal_id, dilutions, mortem, assay, well, process_tech, rxn_tech, reader), as.factor)
   )
 
 df_ctrl <- df_ %>%
@@ -79,158 +81,158 @@ df_ctrl_sum <- df_ctrl %>%
     .by = c(sample_id, dilutions, reaction, assay, sample_type, mortem, group, mpi, process_tech, rxn_tech, reader)
   ) %>%
   mutate(
-    positive = as.integer(group != "Negative Control")
+    positive = factor(group != "Negative Control", levels = c(FALSE, TRUE), labels = c("Negative", "Positive"))
   )
 
 # ROC Analysis -----------------------------------------------------------
 
 
 
-df_ctrl_sum_long <- df_ctrl_sum %>%
-  pivot_longer(
-    cols = c(mpr, ms, auc),
-    names_to = "metric",
-    values_to = "value"
-  )
+# df_ctrl_sum_long <- df_ctrl_sum %>%
+#   pivot_longer(
+#     cols = c(mpr, ms, auc),
+#     names_to = "metric",
+#     values_to = "value"
+#   )
 
-pca_res <- prcomp(~ mpr + ms + auc, data = df_ctrl_sum)
-summary(pca_res)
-df_ctrl_sum$pc1 <- pca_res$x[,1]
+# pca_res <- prcomp(~ mpr + ms + auc, data = df_ctrl_sum)
+# summary(pca_res)
+# df_ctrl_sum$pc1 <- pca_res$x[,1]
 
-get_roc <- function(df, dilutions, assay, sample_type, ...) {
-  temp_df <- df %>%
-    filter(dilutions == !!dilutions, assay == !!assay, sample_type == !!sample_type)
+# get_roc <- function(df, dilutions, assay, sample_type, ...) {
+#   temp_df <- df %>%
+#     filter(dilutions == !!dilutions, assay == !!assay, sample_type == !!sample_type)
 
-  tryCatch({
-      temp_roc <- roc(positive ~ pc1, data = temp_df, ci = TRUE)
-      temp_roc$assay <- assay
-      temp_roc$sample_type <- sample_type
-      temp_roc$dilutions <- dilutions
-      return(temp_roc)
-    },
-    error = function(e) return(NULL)
-  )
-}
+#   tryCatch({
+#       temp_roc <- roc(positive ~ pc1, data = temp_df, ci = TRUE)
+#       temp_roc$assay <- assay
+#       temp_roc$sample_type <- sample_type
+#       temp_roc$dilutions <- dilutions
+#       return(temp_roc)
+#     },
+#     error = function(e) return(NULL)
+#   )
+# }
 
-combos <- distinct(df_ctrl_sum, dilutions, assay, sample_type)
+# combos <- distinct(df_ctrl_sum, dilutions, assay, sample_type)
 
-rocs <- pmap(combos, get_roc, df = df_ctrl_sum, .progress = TRUE)
-df_rocs <- rocs %>%
-  map_dfr(function(x) {
-    tibble(
-      sensitivity = list(x$sensitivities),
-      specificity = list(x$specificities),
-      lower = x$ci[1],
-      area = x$ci[2],
-      upper = x$ci[3],
-      assay = x$assay,
-      sample_type = x$sample_type,
-      dilutions = x$dilutions
-    )
-  }) %>%
-  mutate(
-    label_y = ifelse(assay == "RT-QuIC", 0.4, 0.25),
-    dilutions = factor(
-      dilutions, 
-      levels = c("-4", "-3", "-2"), 
-      labels = latex2exp::TeX(paste0("$10^{", c("-4", "-3", "-2"), "}$"))
-    )
-  ) %>%
-  filter(!is.na(area))
+# rocs <- pmap(combos, get_roc, df = df_ctrl_sum, .progress = TRUE)
+# df_rocs <- rocs %>%
+#   map_dfr(function(x) {
+#     tibble(
+#       sensitivity = list(x$sensitivities),
+#       specificity = list(x$specificities),
+#       lower = x$ci[1],
+#       area = x$ci[2],
+#       upper = x$ci[3],
+#       assay = x$assay,
+#       sample_type = x$sample_type,
+#       dilutions = x$dilutions
+#     )
+#   }) %>%
+#   mutate(
+#     label_y = ifelse(assay == "RT-QuIC", 0.4, 0.25),
+#     dilutions = factor(
+#       dilutions, 
+#       levels = c("-4", "-3", "-2"), 
+#       labels = latex2exp::TeX(paste0("$10^{", c("-4", "-3", "-2"), "}$"))
+#     )
+#   ) %>%
+#   filter(!is.na(area))
 
-df_roc_long <- df_rocs %>%
-  select(assay, dilutions, sample_type, sensitivity, specificity) %>%
-  unnest(where(is.list)) %>%
-  arrange(desc(specificity), sensitivity)
+# df_roc_long <- df_rocs %>%
+#   select(assay, dilutions, sample_type, sensitivity, specificity) %>%
+#   unnest(where(is.list)) %>%
+#   arrange(desc(specificity), sensitivity)
 
-# ROC Curves
-roc_plot <- ggplot(df_rocs) +
-  geom_line(
-    aes(x = 1 - specificity, y = sensitivity, color = assay),
-    data = df_roc_long
-  ) +
-  geom_area(
-    aes(x = 1 - specificity, y = sensitivity, fill = assay),
-    data = df_roc_long,
-    linejoin = "mitre", position = "identity", alpha = 0.2, show.legend=FALSE
-  ) +
-  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-  geom_label(
-    aes(x = 0.65, y = label_y, label = paste(assay, "=", signif(area, 3)), color = assay),
-    hjust = 0, label.padding = unit(0.5, "lines"), show.legend = FALSE
-  ) +
-  facet_grid(sample_type ~ dilutions, labeller = label_parsed) +
-  scale_color_manual(values = c("red", "navy")) +
-  scale_x_continuous(breaks = seq(0, 1, by = 0.25)) +
-  scale_y_continuous(breaks = seq(0, 1, by = 0.25), position = "right") +
-  coord_equal() +
-  # coord_cartesian(expand=FALSE) +
-  labs(
-    x = "1 - Specificity",
-    y = "Sensitivity",
-  ) +
-  guides(color = guide_legend(override.aes = list(linewidth = 6))) +
-  main_theme +
-  theme(
-    plot.title = element_text(size = 24, hjust = 0.5),
-    axis.title = element_text(size = 20),
-    axis.title.y = element_text(vjust = 1),
-    axis.text = element_text(size = 16),
-    strip.text = element_text(size = 20, face = "bold"),
-    legend.title = element_blank(),
-    legend.text = element_text(size = 20),
-    legend.position = "inside",
-    legend.position.inside = c(0.05, 0.95),
-    legend.key.spacing.y = unit(0.5, "cm"),
-    legend.background = element_blank(),
-  )
-roc_plot
+# # ROC Curves
+# roc_plot <- ggplot(df_rocs) +
+#   geom_line(
+#     aes(x = 1 - specificity, y = sensitivity, color = assay),
+#     data = df_roc_long
+#   ) +
+#   geom_area(
+#     aes(x = 1 - specificity, y = sensitivity, fill = assay),
+#     data = df_roc_long,
+#     linejoin = "mitre", position = "identity", alpha = 0.2, show.legend=FALSE
+#   ) +
+#   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+#   geom_label(
+#     aes(x = 0.65, y = label_y, label = paste(assay, "=", signif(area, 3)), color = assay),
+#     hjust = 0, label.padding = unit(0.5, "lines"), show.legend = FALSE
+#   ) +
+#   facet_grid(sample_type ~ dilutions, labeller = label_parsed) +
+#   scale_color_manual(values = c("red", "navy")) +
+#   scale_x_continuous(breaks = seq(0, 1, by = 0.25)) +
+#   scale_y_continuous(breaks = seq(0, 1, by = 0.25), position = "right") +
+#   coord_equal() +
+#   # coord_cartesian(expand=FALSE) +
+#   labs(
+#     x = "1 - Specificity",
+#     y = "Sensitivity",
+#   ) +
+#   guides(color = guide_legend(override.aes = list(linewidth = 6))) +
+#   main_theme +
+#   theme(
+#     plot.title = element_text(size = 24, hjust = 0.5),
+#     axis.title = element_text(size = 20),
+#     axis.title.y = element_text(vjust = 1),
+#     axis.text = element_text(size = 16),
+#     strip.text = element_text(size = 20, face = "bold"),
+#     legend.title = element_blank(),
+#     legend.text = element_text(size = 20),
+#     legend.position = "inside",
+#     legend.position.inside = c(0.05, 0.95),
+#     legend.key.spacing.y = unit(0.5, "cm"),
+#     legend.background = element_blank(),
+#   )
+# roc_plot
 
-# AUC Plot
-auc_plot <- df_rocs %>%
-  mutate(title = "AUC") %>%
-  ggplot(aes(dilutions, area, color = assay, ymax = upper, ymin = lower)) +
-  geom_point(position = position_dodge(width = 0.5), size = 6) +
-  geom_errorbar(position = position_dodge(width = 0.5), width = 0.2) +
-  facet_grid(rows=vars(sample_type), cols=vars(title), labeller = label_parsed, space = "free", scales = "free_x") +
-  # scale_y_continuous(breaks = seq(0, 1, by = 0.2), limits = c(0, 1)) +
-  scale_color_manual(values = c("red", "navy", "darkgreen")) +
-  scale_x_discrete(labels = label_parse()) +
-  scale_y_continuous(breaks = seq(0, 1, by = 0.2), limits = c(NA, 1)) +
-  # coord_flip() +
-  # coord_cartesian(ylim = c(0.5, 1)) +
-  labs(
-    x = "Log10 Dilution Factor",
-    y = "Area Under the Curve",
-    color = ""
-  ) +
-  guides(color = guide_legend(override.aes = list(linewidth = 6))) +
-  main_theme +
-  theme(
-    plot.title = element_text(size = 24, hjust = 0.5),
-    axis.title = element_text(size = 20),
-    axis.text = element_text(size = 16),
-    # strip.text = element_text(size = 20, face = "bold"),
-    legend.title = element_blank(),
-    legend.text = element_text(size = 20),
-    legend.position = "inside",
-    legend.position.inside = c(0.05, 0.95),
-    legend.key.spacing.y = unit(0.5, "cm"),
-    legend.key.spacing.x = unit(1.5, "cm"),
-    legend.background = element_blank(),
-    strip.text = element_blank()
-  )
-auc_plot
+# # AUC Plot
+# auc_plot <- df_rocs %>%
+#   mutate(title = "AUC") %>%
+#   ggplot(aes(dilutions, area, color = assay, ymax = upper, ymin = lower)) +
+#   geom_point(position = position_dodge(width = 0.5), size = 6) +
+#   geom_errorbar(position = position_dodge(width = 0.5), width = 0.2) +
+#   facet_grid(rows=vars(sample_type), cols=vars(title), labeller = label_parsed, space = "free", scales = "free_x") +
+#   # scale_y_continuous(breaks = seq(0, 1, by = 0.2), limits = c(0, 1)) +
+#   scale_color_manual(values = c("red", "navy", "darkgreen")) +
+#   scale_x_discrete(labels = label_parse()) +
+#   scale_y_continuous(breaks = seq(0, 1, by = 0.2), limits = c(NA, 1)) +
+#   # coord_flip() +
+#   # coord_cartesian(ylim = c(0.5, 1)) +
+#   labs(
+#     x = "Log10 Dilution Factor",
+#     y = "Area Under the Curve",
+#     color = ""
+#   ) +
+#   guides(color = guide_legend(override.aes = list(linewidth = 6))) +
+#   main_theme +
+#   theme(
+#     plot.title = element_text(size = 24, hjust = 0.5),
+#     axis.title = element_text(size = 20),
+#     axis.text = element_text(size = 16),
+#     # strip.text = element_text(size = 20, face = "bold"),
+#     legend.title = element_blank(),
+#     legend.text = element_text(size = 20),
+#     legend.position = "inside",
+#     legend.position.inside = c(0.05, 0.95),
+#     legend.key.spacing.y = unit(0.5, "cm"),
+#     legend.key.spacing.x = unit(1.5, "cm"),
+#     legend.background = element_blank(),
+#     strip.text = element_blank()
+#   )
+# auc_plot
 
-ggarrange(
-  auc_plot, roc_plot, ncol = 2, common.legend = TRUE, widths = c(1, 1.5), align = "h",
-  legend = "bottom"
-)
+# ggarrange(
+#   auc_plot, roc_plot, ncol = 2, common.legend = TRUE, widths = c(1, 1.5), align = "h",
+#   legend = "bottom"
+# )
 
-ggsave("roc1.png", path = "figures/tissues", width = 12, height = 8)
+# ggsave("roc1.png", path = "figures/tissues", width = 12, height = 8)
 
-best_performers <- df_rocs %>%
-  filter(area == max(area), .by = c(sample_type))
+# best_performers <- df_rocs %>%
+#   filter(area == max(area), .by = c(sample_type))
 
 
 # Logistic Model ---------------------------------------------------------
@@ -241,9 +243,6 @@ best_performers <- df_rocs %>%
 # measure performance at predicting "Negative". This flips the event to "Positive".
 options(yardstick.event_first = FALSE)
 
-# tidymodels classification requires a factor outcome; glm() accepted integers.
-df_ctrl_sum <- df_ctrl_sum |>
-  mutate(positive = factor(positive, levels = c(0, 1), labels = c("Negative", "Positive")))
 
 # 5-fold CV repeated 3 times produces 15 assessment sets, giving stable metric
 # estimates. strata = positive ensures each fold preserves the class ratio.
@@ -273,7 +272,7 @@ base_recipe <- recipe(positive ~ mpr + ms + auc + dilutions + assay + sample_typ
   step_dummy(all_nominal_predictors()) |>
   # Add an ms x auc interaction term. Both metrics capture kinetic curve shape
   # and are correlated, so their interaction captures a non-additive effect.
-  step_interact(terms = ~ mpr:ms:auc)
+  step_interact(terms = ~ mpr*ms*auc)
 
 # SMOTE generates synthetic minority-class samples by interpolating between real
 # ones in feature space. over_ratio = 0.8 upsamples to 80% of the majority count
@@ -315,15 +314,15 @@ wf_set <- workflow_set(
   models  = list(logistic = lr_spec, rf = rf_spec, svm = svm_spec)
 ) |>
   option_add(
-    grid = grid_regular(penalty(range = c(-4, 0)), mixture(), levels = 10),
+    grid = grid_regular(penalty(range = c(-4, 0)), mixture(), levels = 2), #10
     id = "base_logistic"
   ) |>
   option_add(
-    grid = grid_latin_hypercube(mtry(range = c(1, 9)), min_n(), size = 20),
+    grid = grid_space_filling(mtry(range = c(1, 9)), min_n(), size = 4), #20
     id = "base_rf"
   ) |>
   option_add(
-    grid = grid_latin_hypercube(cost(), rbf_sigma(), size = 20),
+    grid = grid_space_filling(cost(), rbf_sigma(), size = 4), #20
     id = "base_svm"
   )
 
@@ -364,76 +363,101 @@ ggsave("model_comparison.png", path = "figures/tissues", width = 10, height = 6)
 
 # Programmatically select the winning workflow ID (e.g., "base_rf") and the
 # specific hyperparameter combination within it that had the best mean CV roc_auc.
-best_wf_id <- rank_results(tuned_results, rank_metric = "roc_auc") |>
+best_wfs <- tuned_results |>
+  rank_results(rank_metric = "roc_auc") |>
   filter(.metric == "roc_auc") |>
+  group_by(wflow_id) |>
   slice_min(rank, n = 1) |>
+  ungroup()
+
+best_wf_id <- best_wfs |>
+  slice_min(rank,) |>
   pull(wflow_id)
 
-best_params <- tuned_results |>
-  extract_workflow_set_result(id = best_wf_id) |>
-  select_best(metric = "roc_auc")
+get_best_params <- function(id) {
+  tuned_results |>
+    extract_workflow_set_result(id = id) |>
+    select_best(metric = "roc_auc")
+}
+
+best_params <- map(unique(best_wfs$wflow_id), get_best_params)
 
 # finalize_workflow replaces the tune() placeholders with the best found values.
 # fit() then trains on the entire labelled dataset. CV was only for hyperparameter
 # selection and generalisation estimation; the final model uses all available data.
-final_wf  <- tuned_results |>
-  extract_workflow(id = best_wf_id) |>
-  finalize_workflow(best_params)
+get_final_wf <- function(id, params) {
+  tuned_results |>
+    extract_workflow(id = id) |>
+    finalize_workflow(params)
+}
 
-final_fit <- final_wf |> fit(data = df_ctrl_sum)
+final_wfs <- map2(best_wfs$wflow_id, best_params, get_final_wf)
+names(final_wfs) <- best_wfs$wflow_id
+
+final_fits <- map(final_wfs, fit, data = df_ctrl_sum)
+final_fit <- final_fits[[best_wf_id]]
 
 # Print the CV performance summary for the winning model: mean and standard error
 # of each metric across all folds. These are honest out-of-sample estimates.
-tuned_results |>
-  extract_workflow_set_result(id = best_wf_id) |>
-  collect_metrics() |>
-  filter(.metric %in% c("roc_auc", "pr_auc", "j_index", "sensitivity", "specificity")) |>
-  print(n=Inf)
+# tuned_results |>
+#   extract_workflow_set_result(id = best_wf_id) |>
+#   collect_metrics() |>
+#   filter(.metric %in% c("roc_auc", "pr_auc", "j_index", "sensitivity", "specificity")) |>
+#   print(n=Inf)
 
 # Variable importance is only meaningful for tree-based models. glmnet has
 # coefficients and SVM has support vectors, neither of which vip plots the same way.
 if (grepl("rf", best_wf_id)) {
   final_fit |>
     extract_fit_parsnip() |>
-    vip()
+    vip::vip()
   ggsave("variable_importance.png", path = "figures/tissues", width = 8, height = 6)
 }
 
 
-# Plot predictions -------------------------------------------------------
+# ROC --------------------------------------------------------------------
+get_predictions <- function(mod, df) {
+  augment(mod, new_data = df) %>%
+    mutate(
+      engine = extract_spec_parsnip(mod)$engine,
+    )
+}
 
+df_pred <- map_dfr(final_fits, get_predictions, df=df_ctrl_sum)
 
-pred_grid <- df_ctrl_sum |>
-  group_by(assay, sample_type) |>
-  tidyr::expand(
-    mpr = seq(min(mpr), max(mpr), length.out = 50),
-    ms  = quantile(ms,  c(0.25, 0.5, 0.75)),
-    auc = quantile(auc, c(0.25, 0.5, 0.75)),
-    dilutions = levels(dilutions)
+get_filtered_roc <- function(df, assay, sample_type, dilutions, engine, ...) {
+  tryCatch(
+    {
+      df |>
+        filter(assay == !!assay, sample_type == !!sample_type, dilutions == !!dilutions, engine == !!engine) |>
+        roc(positive, .pred_Positive) |>
+        coords() |>
+        mutate(assay = assay, sample_type = sample_type, dilutions = dilutions, engine = engine)
+    }, 
+    error = function(e) return(NULL)
+  )
+}
+
+combos <- distinct(df_pred, assay, sample_type, dilutions, engine)
+df_rocs <- pmap_dfr(combos, get_filtered_roc, df = df_pred, .progress = TRUE)
+
+df_rocs %>%
+  arrange(desc(specificity), sensitivity) |>
+  ggplot(aes(x = 1 - specificity, y = sensitivity, color = engine, linetype=assay)) +
+  geom_line() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  facet_grid(sample_type ~ dilutions, labeller = label_parsed) +
+  scale_color_manual(values = c("red", "navy", "darkgreen")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.25)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25), position = "right") +
+  coord_equal() +
+  # coord_cartesian(expand=FALSE) +
+  labs(
+    x = "1 - Specificity",
+    y = "Sensitivity",
   )
 
-pred_grid <- augment(final_fit, new_data = pred_grid)
-
-plts <- map(levels(df_ctrl_sum$sample_type), function(type) {
-  pred_grid |>
-    filter(sample_type == type) |>
-    mutate(facet = paste("log(AUC) =", round(auc, 2))) |>
-    ggplot(aes(mpr, .pred_Positive, color = factor(round(ms, 2)), fill = factor(round(ms, 2)))) +
-    geom_line(linewidth = 1) +
-    facet_grid(dilutions ~ facet) +
-    labs(x = "log(MPR)", y = "P(Positive)", color = "log(MS)", fill = "log(MS)",
-         title = toupper(type)) +
-    main_theme
-})
-
-ggarrange(plotlist = plts, nrow = 2, ncol = 2, common.legend = TRUE, legend = "right") |>
-  annotate_figure(
-    bottom = text_grob("log(MPR)", size = 24, vjust = 0),
-    left   = text_grob("Probability Positive", rot = 90, size = 24, vjust = 1)
-  )
-ggsave("logistic_regression.png", path = "figures/tissues", width = 24, height = 16, bg = "white")
-
-# Explanation for log scaling
+# Explanation for log scaling --------------------------------------------
 df_cor <- df_ctrl_sum %>%
   select(mpr, ms, auc, positive, assay) %>%
   rename_with(~ paste0("log_", .), c(mpr, ms, auc)) %>%
@@ -511,6 +535,8 @@ ggarrange(
 )
 
 ggsave("corplot.png", path = "figures/tissues", width = 16, height = 12, bg = "white")
+
+
 
 
 

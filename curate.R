@@ -4,7 +4,7 @@ library(cli)
 library(arrow)
 
 
-main <- function() {
+# main <- function() {
   threshold <- 5
   norm_point <- 8
   only_new <- TRUE
@@ -63,7 +63,7 @@ main <- function() {
 
   calcs <- calculate_metrics(
     df_,
-    "Sample IDs", "Dilutions", "Wells", "Assay", "Reaction",
+    "Sample IDs", "Dilutions", "Well", "Assay", "Reaction",
     threshold = threshold
   ) %>%
     mutate(crossed = MPR > threshold)
@@ -85,9 +85,12 @@ main <- function() {
     df_sum <- bind_rows(existing_sum_df, df_sum)
   }
 
+  df_ <- df_ %>%
+    nest(.by=c(`Sample IDs`, Well, Dilutions, Assay, Reaction), .key = "data")
+  
   write_parquet(df_, "data/processedSamples/raw.parquet")
   write_parquet(calcs, "data/processedSamples/calcs.parquet")
   write_parquet(df_sum, "data/processedSamples/summary.parquet")
-}
+# }
 
-main()
+# main()

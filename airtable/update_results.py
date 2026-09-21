@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+import sys
 import argparse
 from pyairtable import Api
 from pyairtable.formulas import match
@@ -21,6 +22,7 @@ print(f"[bold green]Connected to Airtable Base[/bold green]: [bold blue]{app}[/b
 
 home_dir = Path("")
 data_dir = home_dir / "data" / "processedSamples"
+data_file = data_dir / "calcs.parquet"
 raw_dir = home_dir / "raw" / "processedSamples"
 
 parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
@@ -59,10 +61,6 @@ airtable_reactions = Reaction.all()
 existing_rxn_names = set([rxn.rxn_name for rxn in airtable_reactions])
 new_reactions      = [rxn for rxn in reactions if rxn not in existing_rxn_names]
 
-print("[bold green]Retrieving samples from Airtable...[/bold green]")
-airtable_samples   = Sample.all()
-print(f"[bold green]Retrieved {len(airtable_samples)} samples from Airtable.[/bold green]\n")
-
 # Update Reaction Table
 def update_reaction(rxn):
     existing_rxn = rxn in existing_rxn_names
@@ -87,15 +85,15 @@ def update_reaction(rxn):
         )
         return reaction
 
-if not skip_reactions: 
+if skip_reactions: 
+    print("[bold yellow]Skipping updating Reactions table. Only updating Results table.[/bold yellow]\n")
+else:
     reactions_to_save = [rxn for rxn in map(update_reaction, reactions) if rxn]
     if reactions_to_save:
         print(f"\n[bold green]Saving {len(reactions_to_save)} reactions to Airtable...[/bold green]")
         Reaction.batch_save(reactions_to_save)
     else:
-        print("[bold yellow]No new reactions to save.[/bold yellow]\n")
-else:
-    print("[bold yellow]Skipping updating Reactions table. Only updating Results table.[/bold yellow]\n")
+        sys.exit(print("[bold yellow]No new reactions to save.[/bold yellow]\n"))
 
 if new_reactions:
     print("[bold green]Retrieving reactions from Airtable...[/bold green]\n")
@@ -106,12 +104,10 @@ rxns_no_results = set([rxn.rxn_name for rxn in airtable_reactions if not rxn.res
 print(f"[bold green]Found {len(rxns_no_results)} reactions without results.[/bold green]")
 print(rxns_no_results)
 
-def load_results(reactions, only_new_reactions=False):
+def load_results(reactions, path, only_new_reactions=False):
     print("[bold green]Loading results from parquet files...[/bold green]")
-    result_files = list(data_dir.rglob("calcs.parquet"))
-    df_list = list(map(pd.read_parquet, result_files))
-    df = pd.concat(df_list).rename(columns={"Sample IDs": "sample_id"})
-    print(f"Loaded {len(df)} results from parquet files.")
+    df = pd.read_parquet(path).rename(columns={"Sample IDs": "sample_id"})
+    print(f"Loaded {len(df)} results from parquet file.")
     
     if only_new_reactions:
         def filter_new_reactions(reactions):
@@ -126,7 +122,12 @@ def load_results(reactions, only_new_reactions=False):
     return df
 
 # Load in Results
-df = load_results(reactions, only_new_reactions=only_new_reactions)
+df = load_results(reactions, data_file, only_new_reactions=only_new_reactions)
+
+# Load Samples from Airtable
+print("[bold green]Retrieving samples from Airtable...[/bold green]")
+airtable_samples   = Sample.all()
+print(f"[bold green]Retrieved {len(airtable_samples)} samples from Airtable.[/bold green]\n")
 
 # Pull in Samples and Reactions from Airtable
 sample_df = pd.DataFrame([
@@ -147,7 +148,7 @@ rxn_df = pd.DataFrame([
 rxn_df = rxn_df.loc[rxn_df["rxn_name"].isin(reactions)]
 
 # Merge Results with Sample and Reaction IDs
-df_results = df.rename(columns={'Reaction': 'rxn_name', "Wells": "well", "Dilutions": "dilution"})
+df_results = df.rename(columns={'Reaction': 'rxn_name', "Well": "well", "Dilutions": "dilution"})
 df_results = df_results.merge(rxn_df, "left", on="rxn_name")
 df_results = df_results.merge(sample_df, "left", on="sample_id")
 
