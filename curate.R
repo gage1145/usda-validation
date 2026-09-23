@@ -4,7 +4,7 @@ library(cli)
 library(arrow)
 
 
-# main <- function() {
+main <- function() {
   threshold <- 5
   norm_point <- 8
   only_new <- TRUE
@@ -91,6 +91,7 @@ library(arrow)
   write_parquet(df_, "data/processedSamples/raw.parquet")
   write_parquet(calcs, "data/processedSamples/calcs.parquet")
   write_parquet(df_sum, "data/processedSamples/summary.parquet")
-# }
+}
 
-# main()
+main()
+rm(main)
