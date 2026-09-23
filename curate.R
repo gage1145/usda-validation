@@ -1,13 +1,53 @@
-library(quicR)
-library(tidyverse)
-library(cli)
-library(arrow)
-
-
 main <- function() {
+  require(quicR)
+  require(tidyverse)
+  require(cli)
+  require(arrow)
+  require(furrr)
+  require(janitor)
+  
   only_new <- TRUE
-  mirai::daemons(4)
+  threshold  <- 5
+  norm_point <- 8
+  print_progress <- FALSE
+  raw_cols <- c(
+    "Sample IDs", 
+    "Dilutions", 
+    "Well", 
+    "Assay", 
+    "Reaction", 
+    "Time", 
+    "RFU", 
+    "Norm", 
+    "Deriv"
+  )
+  
+  plan(multisession, workers = parallel::detectCores() - 1)
 
+  extract_file_meta <- function(x, pattern) {
+    pattern_count <- str_count(x, pattern)
+    str_split_i(x, pattern, pattern_count + 1) %>%
+      str_remove("\\.[[:alpha:]]+$")
+  }
+
+  get_raw <- function(file, progress, cols) {
+    rxn   <- extract_file_meta(file, "/")
+    assay <- extract_file_meta(rxn, "_")
+
+    if (progress) cli_alert_info(sprintf(" Reading file: %s", rxn))
+
+    file %>%
+      get_quic(norm_point = norm_point) %>%
+      mutate(
+        `Sample IDs` = str_remove(`Sample IDs`, "-P"),
+        Dilutions = -log10(as.numeric(Dilutions)),
+        Assay = assay,
+        Reaction = rxn
+      ) %>%
+      select(all_of(cols)) %>%
+      suppressMessages() %>%
+      suppressWarnings()
+  }
 
   user_input <- readline("Only new reactions will be updated. Continue [Y] or update all [n]? ")
   user_happy <- tolower(user_input) == "y"
@@ -18,7 +58,6 @@ main <- function() {
   if (only_new) {
     existing_raw_files  <- list.files("data/processedSamples", pattern = "raw.parquet$",     full.names = TRUE, recursive = TRUE)
     existing_data_files <- list.files("data/processedSamples", pattern = "calcs.parquet$",   full.names = TRUE, recursive = TRUE)
-    existing_sum_files  <- list.files("data/processedSamples", pattern = "summary.parquet$", full.names = TRUE, recursive = TRUE)
 
     if (length(existing_data_files != 0)) {
       existing_raw_df  <- map_dfr(existing_raw_files,  read_parquet)
@@ -33,42 +72,7 @@ main <- function() {
 
   if (length(files) == 0) return(print("No new files to update"))
 
-  df_ <- map_dfr(
-    files, 
-    in_parallel(
-      function(file) {  
-        library(stringr)
-        library(magrittr)
-        library(dplyr)
-        library(quicR)
-        library(cli)
-
-        extract_file_meta <- function(x, pattern) {
-          pattern_count <- str_count(x, pattern)
-          str_split_i(x, pattern, pattern_count + 1) %>%
-            str_remove("\\.[[:alpha:]]+$") # Remove file extension.
-        }
-        
-        threshold <- 5
-        norm_point <- 8
-        rxn <- extract_file_meta(file, "/")
-        assay <- extract_file_meta(rxn, "_")
-
-        cli_alert_info(sprintf(" Reading file: %s", rxn))
-
-        file %>%
-          get_quic(norm_point = norm_point) %>%
-          mutate(
-            `Sample IDs` = str_remove(`Sample IDs`, "-P"),
-            Dilutions = -log10(as.numeric(Dilutions)),
-            Assay = assay,
-            Reaction = rxn
-          ) %>%
-          suppressMessages() %>%
-          suppressWarnings()
-      }
-    )
-  )
+  df_ <- future_map_dfr(files, get_raw, progress = print_progress, cols = raw_cols, .progress = TRUE)
 
   calcs <- calculate_metrics(
     df_,
@@ -77,29 +81,17 @@ main <- function() {
   ) %>%
     mutate(crossed = MPR > threshold)
 
-  df_sum <- calcs %>%
-    summarize(
-      across(
-        c("MPR", "MS", "TtT", "RAF", "AUC"), 
-        list(mean=mean, median=median, min=min, max=max, stdev=sd, var=var, iqr=IQR)
-      ),
-      reps = n(),
-      thres_pos = sum(crossed) > reps / 2,
-      .by = c(`Sample IDs`, Dilutions, Assay)
-    )
-
   if (only_new) {
     df_    <- bind_rows(existing_raw_df, df_)
     calcs  <- bind_rows(existing_data_df, calcs)
-    df_sum <- bind_rows(existing_sum_df, df_sum)
   }
 
   df_ <- df_ %>%
-    nest(.by=c(`Sample IDs`, Well, Dilutions, Assay, Reaction), .key = "data")
+    nest(.by=c(`Sample IDs`, Well, Dilutions, Assay, Reaction), .key = "data") %>%
+    rename(sample = `Sample IDs`, well = Well, dilution = Dilutions, assay = Assay, rxn_name = Reaction)
   
-  write_parquet(df_, "data/processedSamples/raw.parquet")
-  write_parquet(calcs, "data/processedSamples/calcs.parquet")
-  write_parquet(df_sum, "data/processedSamples/summary.parquet")
+  write_parquet(df_, "data/raw.parquet")
+  write_parquet(calcs, "data/calcs.parquet")
 }
 
 main()
