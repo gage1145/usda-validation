@@ -43,6 +43,7 @@ cd usda-validation
 
 ## Environment Setup
 This project uses **two** virtual environments — one for R (`renv`) and one for Python (`venv`). Set both up once, up front, before running any pipeline steps.
+> **Imporant: Never EVER commit .Renviron or .env to version control!** These contain sensitive keys that would give unwanted users access to our data.
 
 ### R environment (`renv`)
 This project uses `renv` to lock R package versions. Always work inside the `renv` environment so everyone gets the same results. It depends on the development version 3.0.4 of [quicR](https://github.com/gage1145/quicR/releases/tag/v3.0.4); `renv` should pull the right version automatically.
@@ -61,17 +62,18 @@ This project uses `renv` to lock R package versions. Always work inside the `ren
    # Restore all locked packages. Run this the first time you set up the project.
    renv::restore()
 
-   # quicR and airtabler sometimes fail to install through restore.
+   # quicR, airtabler, and vip sometimes fail to install through restore.
    # If you see errors about them, install manually:
    renv::install("gage1145/quicR")
    renv::install("bergant/airtabler")
+   renv::install("bgreenwell/vip")
    ```
 
 ### Python environment (`venv`)
 Set up a Python virtual environment and install dependencies.
 
 **Windows (PowerShell):**
-```powershell
+```bash
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -196,21 +198,24 @@ You are now ready to work in the pipeline.
 ## Data Workflow
 The pipeline has 6 steps:
 1. Add raw Excel files into the appropriate sub-directory of `raw/`.
+  - Most files will go in /raw/processedSamples/ unless specified otherwise.
 2. Extract the raw data into tidy-data formats (R).
 3. Calculate kinetic metrics from the raw data (R).
 4. Save results as compressed parquet files in `data/` (R).
-5. Push results to Airtable (Python).
-6. Analyze results by pulling from Airtable, which also contains metadata (R).
+5. Push results to Airtable and dump to parquet files (Python).
+6. Analyze results by pulling from Airtable or from data-dumped parquet files.
 
-> **Important** — Step 5 can only be done by a user with write access to the Airtable base.
+> **Important**: Step 5 can only be done by a user with write access to the Airtable base.
 
-> Steps 2–4 are all handled by `curate.R`. Step 5 is handled by `airtable/update_results.py`. 
+> Steps 2–4 are all handled by `curate.R`. 
 
-> Step 6 uses scripts in `scripts/`.
+> Step 5 is handled by `airtable/update_results.py`. Run `python airtable/update_results.py -h` for more information.
+
+> Step 6 is done entirely in R and typically uses scripts in `scripts/`.
 
 ---
 
-### Step 1 — Adding Raw Files
+### Step 1: Adding Raw Files
 MARS-exported Excel files should be placed inside `raw/`. Choose the sub-folder based on the sample type:
 
 | Sample type | Sub-folder |
@@ -223,7 +228,7 @@ If you're unsure where a file belongs, check what's already in each folder for a
 
 ---
 
-### Step 2–4 — Extracting Raw Data and Saving Parquet Files
+### Step 2–4: Extracting Raw Data and Saving Parquet Files
 With the R environment set up (see [Environment Setup](#environment-setup)), run the curation script from the R console:
 ```R
 # This does steps 2, 3, and 4.
@@ -233,26 +238,24 @@ When `curate.R` finishes, you'll see new `.parquet` files in `data/`. These are 
 
 ---
 
-### Step 5 — Updating Airtable
+### Step 5: Updating Airtable
 With the Python environment activated (see [Environment Setup](#environment-setup)), push the parquet results to Airtable:
 ```bash
-python airtable/update_results.py
+python airtable/update_results.py --update-airtable
 ```
 
 > If you see an authentication error, double-check that `.env` exists in the project root and contains `KEY=...`.
 
+> You can additionally just dump the data to parquet files by omitting `--update-airtable`. This data can be found in `data/data_dump.parquet`.
+
+>If you are authorized to do so, you can unblind the data by adding `--unblinded`.
+
 ---
 
-### Step 6 — Analyzing Data from Airtable
+### Step 6: Analyzing Data from Airtable
 All analysis is done in R. Make sure the `renv` environment is active and your `.Renviron` is set up (see [Airtable Integration](#airtable-integration)).
 
-The `scripts/` folder contains one analysis/figures script per sample type, e.g.:
-- `oral-swab_figures.R`
-- `nasal-swab_figures.R`
-- `ramalt_figures.R`, `ramalt_analysis.R`, `ramalt_roc.R`
-- `blood_figures.R`, `blood_analysis.R`, `blood_roc.R`
-- `serum-plasma_figures.R`, `serum-plasma_analysis.R`
-- `necropsy_figures.R`
+The `scripts/` folder contains one analysis/figures script per sample type.
 
 To run one:
 ```R
@@ -262,6 +265,9 @@ source("scripts/oral-swab_figures.R")
 Figures are written to `figures/`.
 
 #### Example: pulling data from Airtable yourself
+
+> **Important**: This can be time consuming. It is recommended that you just use the data dump
+
 ```R
 library(airtabler)
 
@@ -292,7 +298,7 @@ results <- tables$results$select_all(
 
 | Problem | Fix |
 |---|---|
-| `renv::restore()` fails on quicR or airtabler | Run `renv::install("gage1145/quicR")` and `renv::install("bergant/airtabler")` manually. |
+| `renv::restore()` fails on quicR, airtabler, or vip | Run `renv::install("gage1145/quicR")`, `renv::install("bergant/airtabler")`, and `renv::install("bgreenwell/vip")` manually.|
 | R can't find the Airtable key | Make sure `.Renviron` lives in the project root and the variable is named **exactly** `AIRTABLE_API_KEY`. Try running in the R console `usethis::edit_r_environ()`. Restart R after editing.|
 | Python can't find the Airtable key | Make sure `.env` lives in the project root and contains `KEY=...`. |
 | `python` command not found (Windows) | Reinstall Python and tick "Add Python to PATH". |
