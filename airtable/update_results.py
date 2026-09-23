@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 import os
-import sys
 import argparse
 from pyairtable import Api
 from pyairtable.formulas import match
@@ -76,12 +75,12 @@ def update_reaction(rxn):
         technician    = [Technician.first(formula=tech_formula(tech_initials))]
         
         reaction = Reaction(
-            rxn_name    = rxn,
-            assay       = assay,
-            date        = date,
-            technician  = technician,
-            reader      = reader,
-            temperature = 42
+            rxn_name       = rxn,
+            assay          = assay,
+            date           = date,
+            technician_id  = technician,
+            reader         = reader,
+            temperature    = 42
         )
         return reaction
 
@@ -93,7 +92,7 @@ else:
         print(f"\n[bold green]Saving {len(reactions_to_save)} reactions to Airtable...[/bold green]")
         Reaction.batch_save(reactions_to_save)
     else:
-        sys.exit(print("[bold yellow]No new reactions to save.[/bold yellow]\n"))
+        print("[bold yellow]No new reactions to save.[/bold yellow]\n")
 
 if new_reactions:
     print("[bold green]Retrieving reactions from Airtable...[/bold green]\n")
@@ -133,7 +132,7 @@ print(f"[bold green]Retrieved {len(airtable_samples)} samples from Airtable.[/bo
 sample_df = pd.DataFrame([
     {
         "id": sample.id,
-        "sample_id": sample.sample_id
+        "sample_id": sample.sample
     }
     for sample in airtable_samples
 ])
@@ -151,6 +150,7 @@ rxn_df = rxn_df.loc[rxn_df["rxn_name"].isin(reactions)]
 df_results = df.rename(columns={'Reaction': 'rxn_name', "Well": "well", "Dilutions": "dilution"})
 df_results = df_results.merge(rxn_df, "left", on="rxn_name")
 df_results = df_results.merge(sample_df, "left", on="sample_id")
+df_results = df_results[pd.notnull(df_results.id)]
 
 print(f"[bold green]Total results to update:[/bold green] {len(df_results)}\n")
 
@@ -229,10 +229,9 @@ def update_result(row):
         result.raf = metrics.get("raf")
         result.auc = metrics.get("auc")
     else:
-
         result = Result(
-            sample = sample,
-            reaction = reaction,
+            sample_id = sample,
+            reaction_id = reaction,
             dilution = metrics.get("dilution"),
             well = metrics.get("well"),
             mpr = metrics.get("mpr"),
