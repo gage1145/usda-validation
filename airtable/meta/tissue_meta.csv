@@ -1,4 +1,4 @@
-sample_id,animal,process_date,concentration,sample_type,bilateral,mortem,mpi
+sample,animal,process_date,concentration,sample_type,bilateral,mortem,mpi
 1969,1942,2025-06-30,0.1,RPLN,TRUE,post-mortem,
 1970,1945,2025-06-30,0.1,RPLN,,post-mortem,
 1971,1945,2025-06-30,0.1,obex,,post-mortem,
@@ -775,3 +775,65 @@ B-468,B-206,2026-08-06,,whole blood,,ante-mortem,75
 B-469,O-37,2026-08-06,,whole blood,,ante-mortem,75
 B-470,Y-15,2026-08-06,,whole blood,,ante-mortem,75
 B-471,Y-23,2026-08-06,,whole blood,,ante-mortem,75
+S-2561,B-119,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2562,B-120,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2563,B-155,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2564,B-158,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2565,B-161,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2566,B-199,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2567,B-206,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2568,O-37,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2569,Y-15,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2570,Y-23,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2571,1946,2026-08-07,,MNPRO oral swab,,ante-mortem,69
+S-2572,B-119,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2573,B-120,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2574,B-155,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2575,B-158,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2576,B-161,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2577,B-199,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2578,B-206,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2579,O-37,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2580,Y-15,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2581,Y-23,2026-08-06,,NADC oral swab,,ante-mortem,72
+S-2582,B-119,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2583,B-120,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2584,B-155,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2585,B-158,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2586,B-161,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2587,B-199,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2588,B-206,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2589,O-37,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2590,Y-15,2026-08-19,,MNPRO oral swab,,ante-mortem,75
+S-2591,Y-23,2026-08-17,,MNPRO oral swab,,ante-mortem,75
+S-2592,B-119,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2593,B-120,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2594,B-155,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2595,B-158,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2596,B-161,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2597,B-199,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2598,B-206,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2599,O-37,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2600,Y-15,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2601,Y-23,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2602,1946,2026-08-07,,MNPRO nasal swab,,ante-mortem,69
+S-2603,B-119,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2604,B-120,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2605,B-155,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2606,B-158,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2607,B-161,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2608,B-199,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2609,B-206,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2610,O-37,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2611,Y-15,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2612,Y-23,2026-08-06,,NADC nasal swab,,ante-mortem,72
+S-2613,B-119,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2614,B-120,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2615,B-155,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2616,B-158,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2617,B-161,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2618,B-199,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2619,B-206,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2620,O-37,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2621,Y-15,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
+S-2622,Y-23,2026-08-19,,MNPRO nasal swab,,ante-mortem,75
