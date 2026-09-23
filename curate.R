@@ -5,23 +5,15 @@ library(arrow)
 
 
 main <- function() {
-  threshold <- 5
-  norm_point <- 8
   only_new <- TRUE
+  mirai::daemons(4)
 
 
   user_input <- readline("Only new reactions will be updated. Continue [Y] or update all [n]? ")
   user_happy <- tolower(user_input) == "y"
   if (!user_happy) only_new <- FALSE
 
-
   files <- list.files("raw/processedSamples", ".xlsx", full.names = TRUE, recursive = TRUE)
-
-  extract_file_meta <- function(x, pattern) {
-    pattern_count <- str_count(x, pattern)
-    str_split_i(x, pattern, pattern_count + 1) %>%
-      str_remove("\\.[[:alpha:]]+$") # Remove file extension.
-  }
 
   if (only_new) {
     existing_raw_files  <- list.files("data/processedSamples", pattern = "raw.parquet$",     full.names = TRUE, recursive = TRUE)
@@ -41,25 +33,42 @@ main <- function() {
 
   if (length(files) == 0) return(print("No new files to update"))
 
-  get_raw <- function(file) {
-    rxn <- extract_file_meta(file, "/")
-    assay <- extract_file_meta(rxn, "_")
+  df_ <- map_dfr(
+    files, 
+    in_parallel(
+      function(file) {  
+        library(stringr)
+        library(magrittr)
+        library(dplyr)
+        library(quicR)
+        library(cli)
 
-    cli_alert_info(sprintf(" Reading file: %s", rxn))
+        extract_file_meta <- function(x, pattern) {
+          pattern_count <- str_count(x, pattern)
+          str_split_i(x, pattern, pattern_count + 1) %>%
+            str_remove("\\.[[:alpha:]]+$") # Remove file extension.
+        }
+        
+        threshold <- 5
+        norm_point <- 8
+        rxn <- extract_file_meta(file, "/")
+        assay <- extract_file_meta(rxn, "_")
 
-    file %>%
-      get_quic(norm_point = norm_point) %>%
-      mutate(
-        `Sample IDs` = str_remove(`Sample IDs`, "-P"),
-        Dilutions = -log10(as.numeric(Dilutions)),
-        Assay = assay,
-        Reaction = rxn
-      ) %>%
-      suppressMessages() %>%
-      suppressWarnings()
-  }
+        cli_alert_info(sprintf(" Reading file: %s", rxn))
 
-  df_ <- map_dfr(files, get_raw)
+        file %>%
+          get_quic(norm_point = norm_point) %>%
+          mutate(
+            `Sample IDs` = str_remove(`Sample IDs`, "-P"),
+            Dilutions = -log10(as.numeric(Dilutions)),
+            Assay = assay,
+            Reaction = rxn
+          ) %>%
+          suppressMessages() %>%
+          suppressWarnings()
+      }
+    )
+  )
 
   calcs <- calculate_metrics(
     df_,
