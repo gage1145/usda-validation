@@ -6,6 +6,7 @@ from models import *
 from pathlib import Path
 from rich import print
 import argparse
+import os
 
 load_dotenv()
 KEY = os.getenv('KEY')
@@ -49,6 +50,7 @@ print(f"  [dim]{len(animals)} animals, {len(samples)} samples, {len(reactions)} 
 animals_to_include = [
     {
         "animal_id": animal.id,
+        "animal": animal.animal if unblinded else None,
         "dob": animal.dob,
         "dod": animal.dod,
         "room": animal.room,
@@ -59,13 +61,13 @@ animals_to_include = [
         "species": animal.species
     } for animal in animals
 ]
-if unblinded: animals_to_include.append([{"animal":animal.animal} for animal in animals])
 df_animals = pd.DataFrame(animals_to_include)
 
 # Sample dataframe
 samples_to_include = [
     {
         "sample_id": sample.id,
+        "sample": sample.sample if unblinded else None,
         "animal_id": sample.animal_id,
         "sample_type_id": sample.sample_type_id,
         "concentration": sample.concentration,
@@ -74,7 +76,6 @@ samples_to_include = [
         "process_date": sample.process_date,
     } for sample in samples
 ]
-if unblinded: samples_to_include.append([{"sample": sample.sample} for sample in samples])
 df_samples = resolve_links(pd.DataFrame(samples_to_include), ["animal_id", "sample_type_id"])
 
 # Sample Type dataframe
@@ -116,6 +117,9 @@ df_results = pd.DataFrame([
 ])
 df_results = resolve_links(df_results, ["sample_id", "reaction_id"])
 
+# Raw dataframe
+df_raw = pd.read_parquet("data/raw.parquet").drop(columns="sample")
+
 # Merge dataframes
 print("Merging dataframes...")
 df_merged = (
@@ -124,11 +128,12 @@ df_merged = (
     .merge(df_samples, on="sample_id")
     .merge(df_sample_types, on="sample_type_id")
     .merge(df_animals, on="animal_id")
+    .merge(df_raw, on=["well", "dilution", "assay", "rxn_name"])
 )
 print(f"  [dim]{len(df_merged)} rows[/dim]")
 
 print(f"Saving to [cyan]{data_dump_path}[/cyan]...")
-df_merged.to_parquet(data_dump_path)
+df_merged.to_parquet(data_dump_path, compression="brotli")
 
 if update_airtable:
     print("[orange]Overwriting existing data dump from Airtable...[/orange]")
