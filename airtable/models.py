@@ -68,8 +68,6 @@ class Sample(Model):
     sample = F.SingleLineTextField("sample")
     animal_id = F.LinkField("animal_id", Animal, lazy=True)
     sample_type_id = F.LinkField("sample_type_id", SampleType, lazy=True)
-    # sample_type = F.LookupField("sample_type")
-    # mortem = F.LookupField("mortem")
     concentration = F.PercentField("concentration")
     mpi = F.NumberField("mpi")
     bilateral = F.CheckboxField("bilateral")
@@ -108,12 +106,6 @@ class SampleReaction(Model):
 #         table_name = "raw"
 
 class Result(Model):
-
-    # def dont_be_lazy(self):
-    #     self.be_lazy = False
-    
-    # be_lazy = True
-
     result_id = F.AutoNumberField("result_id")
     sample_id = F.LinkField("sample_id", Sample, lazy=True)
     reaction_id = F.LinkField("reaction_id", Reaction, lazy=True)
