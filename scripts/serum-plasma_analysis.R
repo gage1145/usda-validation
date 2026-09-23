@@ -36,7 +36,7 @@ df_ <- lapply(files, get_raw) %>%
 
 calcs <- calculate_metrics(
   df_, 
-  "Sample", "Treatment", "Status", "Wells", "Dilutions", "Assay", "Reaction", 
+  "Sample", "Treatment", "Status", "Well", "Dilutions", "Assay", "Reaction", 
   threshold=threshold
 ) %>%
   mutate(crossed = TtT != max(df_$Time))
