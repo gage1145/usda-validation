@@ -1,156 +1,207 @@
 ---
-title: "USDA Validation Report"
-author: "Gage Rowden"
+title: "USDA Validation"
 format:
-  pdf:
-    fig-width: 6.5
-    fig-height: 4.5
-    fig-align: center
-    documentclass: report
-    header-includes:
-      - \usepackage{fontspec}
-      - \usepackage{caption}
-      - \setmainfont{Calibri}
-      - \AtBeginDocument{\floatplacement{table}{H}}
-    geometry:
-      - top=1in
-      - bottom=1in
-      - left=1in
-      - right=1in
-    fontsize: 12pt
-  html:
-    embed-resources: true
-    code-background: true
-    page-layout: full
-format-links: false
-editor: source
+  dashboard:
+    orientation: columns
+    nav-buttons: []
+execute:
+  echo: false
+  warning: false
+theme: custom.scss
 ---
-## RAMALT ROC Analysis
-RAMALT biopsies taken at time zero were considered the negative control group, and those taken at time of necropsy were considered the positive control group. Three metrics, AUC, MPR, and MS were analyzed to determine the sensitivity and specificity of the two assays and dilution factors.
 
-Data is first loaded from Airtable using the airtabler API wrapper. The library can be installed with `{r} remotes::install_github("https://github.com/bergant/airtabler")`. The user must also have a personal access token with the appropriate permissions to access the data.
-```{r warning=FALSE, message=FALSE}
+```{r setup, include=FALSE}
 library(tidyverse)
-library(airtabler)
+library(arrow)
+library(scales)
+library(ggpubr)
 
-APP <- "app7KsgYl2jhOnYg7"
+# Load in data
+df_ <- read_parquet("data/data_dump.parquet")
 
-# Get the necessary tables
-tables <- airtable(APP, c("animals", "results"))
+n_samples <- n_distinct(df_$sample)
+n_reactions <- n_distinct(df_$reaction_id)
+n_results <- n_distinct(df_$result_id)
 
-results <- tables$results$select_all(
-  filterByFormula = "{sample_type} = 'RAMALT'"
-)
-
-animals <- tables$animals$select_all()
-animals <- rename(animals, "animal" = "animal_id")
+theme_set(theme_minimal(base_size = 13))
 ```
 
-First the data was cleaned and formatted. 
-```{r warning=FALSE, message=FALSE}
-library(janitor)
+# Overview
 
-df_ <- results %>%
-  mutate(across(everything(), as.character)) %>%
-  left_join(animals, by = "animal") %>%
-  clean_names() %>%
-  mutate(
-    across(c(sample_id, animal), as.factor),
-    assay = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
-    mpi   = as.integer(mpi),
-    across(c(mpr, raf, ttt, ms, auc), as.numeric)
-  )
-```
-Next, the data was subset to include only the control groups.
+## Column {width="80%"}
+
+### Row {height="15%"}
 ```{r}
-df_roc <- df_ %>%
-  filter(mpi == 0 | mortem == "post-mortem") %>%
-  mutate(
-    positive = as.integer(mortem == "post-mortem")
-  ) %>%
-  pivot_longer(cols=c("mpr", "ms", "auc"))
+#| content: valuebox
+#| title: "Samples"
+list(
+  icon = "eyedropper",
+  color = "primary",
+  value = label_comma()(n_samples)
+)
 ```
-Combinations of the relevant variables (metrics, assay, dilution) were generated for making ROCs of subset data. Additionally, a couple of functions for generating the ROCs and formatting data.
-```{r message=FALSE}
-library(pROC)
 
-# Build all combinations of variables
-combos <- expand.grid(
-  m = unique(df_roc$name),
-  a = unique(df_roc$assay),
-  d = unique(df_roc$dilution),
-  stringsAsFactors = FALSE
+```{r}
+#| content: valuebox
+#| title: "Reactions"
+list(
+  icon = "grid-3x3",
+  color = "info",
+  value = label_comma()(n_reactions)
+)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Results"
+list(
+  icon = "clipboard-data",
+  color = "success",
+  value = label_comma()(n_results)
+)
+```
+
+### Row {height="85%"}
+
+#### Column {width="33.33%"}
+
+```{r}
+#| title: "Running Totals"
+#| fig-height: 10
+#| fig-width: 8
+df_dates <- df_ %>%
+  arrange(date) %>%
+  summarise(
+    n_samples = n_distinct(sample),
+    n_reactions = n_distinct(reaction_id),
+    n_results = n_distinct(result_id),
+    .by = date
+  ) %>%
+  mutate(
+    `Cumulative Samples` = cumsum(n_samples),
+    `Cumulative Reactions` = cumsum(n_reactions),
+    `Cumulative Results` = cumsum(n_results)
+  )
+
+plot_labs <- df_dates %>%
+  select(date, `Cumulative Samples`, `Cumulative Reactions`, `Cumulative Results`) %>%
+  pivot_longer(-1, names_to = "type", values_to = "count") %>%
+  summarise(
+    y = max(count),
+    x = min(date),
+    xend = max(date),
+    .by = type
+  )
+
+df_dates %>%
+  select(date, `Cumulative Samples`, `Cumulative Reactions`, `Cumulative Results`) %>%
+  pivot_longer(-1, names_to = "type", values_to = "count") %>%
+  ggplot(aes(x = date, y = count)) +
+  geom_line() +
+  geom_segment(aes(x = x, xend = xend, y = y), data = plot_labs, linetype = "dashed", color = "red") +
+  geom_label(aes(x = x, y = y, label = label_comma()(y)), data = plot_labs, hjust = 0, ) +
+  facet_wrap(vars(type), ncol=1, scales = "free_y") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b %Y") +
+  scale_y_continuous(labels = label_comma(), n.breaks = 10) +
+  labs(x = "", y = "Count") +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+  )
+```
+
+
+#### Column {width="33.33%"}
+
+```{r}
+#| title: "Samples by Sample Type"
+#| fig-height: 10
+#| fig-width: 8
+df_sample_types <- df_ %>%
+  mutate(
+    sample_type = case_when(
+      str_detect(sample_type, "oral") ~ "oral swab",
+      str_detect(sample_type, "nasal") ~ "nasal swab",
+      .default = as.character(sample_type)
+    )
+  ) %>%
+  summarise(
+    n_samples = n_distinct(sample),
+    n_reactions = n_distinct(reaction_id),
+    n_results = n_distinct(result_id),
+    .by = sample_type
+  )
+
+df_sample_types %>%
+  filter(sample_type != "PLN") %>%
+  mutate(sample_type = fct_reorder(sample_type, n_samples, .desc = TRUE)) %>%
+  ggplot(aes(x = sample_type, y = n_samples)) +
+  geom_col(fill = "steelblue") +
+  geom_label(aes(y=n_samples - 2, label = label_comma()(n_samples)), vjust = 1) +
+  labs(x = "", y = "Samples")
+```
+
+## Column {width="33.33%"}
+
+```{r}
+#| title: "Pairwise Metric Correlation (log scale)"
+#| fig-height: 14
+#| fig-width: 8
+
+# Explanation for log scaling --------------------------------------------
+df_cor <- df_ %>%
+  filter(str_detect(group, "Control") | mortem == "post-mortem" | mpi == 0) %>%
+  mutate(
+    across(c(mpr, ms, auc), log),
+    positive = group == "Positive Control" | mortem == "post-mortem",
+    positive = ifelse(positive, "Positive", "Negative")
+  )
+
+metric_combos <- c("mpr", "ms", "auc") %>%
+  combn(2) %>%
+  t() %>%
+  as.data.frame() %>%
+  rename(x = 1, y = 2)
+
+make_cor_plot <- function(df, x, y, color_group, facet_group, alpha = 0.1) {
+  df %>%
+    ggplot(aes(.data[[x]], .data[[y]])) +
+    geom_point(
+      aes(
+        color = .data[[color_group]],
+        # shape = .data[[shape_group]]
+      ), alpha = alpha, size=2) +
+    scale_color_manual(values = c("navy", "red")) +
+    scale_shape_manual(values = c(1, 2)) +
+    labs(
+      x = toupper(x),
+      y = toupper(y),
+      color = str_to_title(color_group),
+      # shape = str_to_title(shape_group)
+    ) +
+    facet_wrap(vars(.data[[facet_group]]), ncol=2) +
+    guides(
+        color = guide_legend(override.aes = list(alpha = 1, size = 5, shape = "square"))
+    ) +
+    # main_theme +
+    theme(
+      legend.title = element_blank(),
+      legend.text = element_text(size = 16),
+      legend.key = element_rect(fill = "white", color = "white"),
+      strip.text = element_text(size = 16, face = "bold"),
+    )
+}
+
+cor_plots <- pmap(
+  metric_combos,
+  make_cor_plot,
+  df = df_cor,
+  color_group = "positive",
+  facet_group = "assay",
+  alpha = 0.1
 )
 
-# Function to compute ROC + coords
-compute_roc <- function(m, a, d) {
-  sub_df <- df_roc %>%
-    filter(name == m, assay == a, dilution == d)
-  
-  sub_roc <- roc(
-    sub_df, response = "positive", predictor = "value", quiet=TRUE
-  )
-  sub_roc$metric   <- m
-  sub_roc$assay    <- a
-  sub_roc$dilution <- d
-  
-  coord_df <- coords(sub_roc) %>%
-    mutate(metric = m, assay = a, dilution = d)
-  
-  list(roc = sub_roc, coords = coord_df)
-}
-
-# Metric Labeller (capitalizes the metric acronyms)
-relabel_metrics <- function(x) {
-  lvls = sort(unique(x))
-  factor(x, levels = lvls, labels = toupper(lvls))
-}
+ggarrange(
+  plotlist = cor_plots, align = "hv", legend="bottom", ncol = 1,
+  common.legend = TRUE, font.label = list(size = 30)
+)
 ```
-### RAMALT ROC Results
-Apply the ROC function to the sub-sampled datasets.
-```{r message=FALSE}
-library(kableExtra)
-
-roc_results  <- pmap(combos, compute_roc)
-rocs         <- map(roc_results, "roc")
-coord_df     <- map(roc_results, "coords") %>% 
-  bind_rows() %>%
-  mutate(metric = relabel_metrics(metric))
-
-# AUC summary table
-auc_df <- combos %>%
-  mutate(
-    auc         = map_dbl(rocs, auc),
-    specificity = 0.65,
-    sensitivity = ifelse(a == "RT-QuIC", 0.15, 0.05),
-    label       = paste0(a, " AUC = ", signif(auc, 3)),
-    m = relabel_metrics(m)
-  ) %>%
-  rename(assay = a, dilution = d, metric = m) %>%
-  arrange(desc(auc))
-kable(auc_df)
-```
-
-```{r echo=FALSE}
-coord_df %>%
-  group_by(assay, dilution, metric) %>%
-  arrange(sensitivity) %>%
-  ggplot(aes(specificity, sensitivity, color = assay)) +
-  geom_step(linewidth = 1) +
-  geom_text(
-    aes(label = label, color = assay),
-    data = auc_df, hjust = 0, size = 2,
-    show.legend = FALSE
-  ) +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  facet_grid(vars(dilution), vars(metric)) +
-  scale_x_reverse() +
-  labs(y = "Sensitivity", x = "Specificity") +
-  theme(
-    legend.position = "none",
-    legend.title = element_blank()
-  )
-```
-
-
-
