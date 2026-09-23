@@ -57,6 +57,7 @@ class Reaction(Model):
     reader = F.SelectField("reader")
     temperature = F.NumberField("temperature")
     results = F.LinkField("results", "Result", lazy=True)
+    file = F.AttachmentsField("file", validate_type=False)
 
     class Meta:
         api_key = KEY
@@ -111,6 +112,7 @@ class Result(Model):
     reaction_id = F.LinkField("reaction_id", Reaction, lazy=True)
     dilution = F.NumberField("dilution")
     well = F.SingleLineTextField("well")
+    cutoff = F.NumberField("cutoff")
     mpr = F.NumberField("mpr")
     ms = F.NumberField("ms")
     ttt = F.NumberField("ttt")

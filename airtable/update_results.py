@@ -20,9 +20,9 @@ base = api.base(app)
 print(f"[bold green]Connected to Airtable Base[/bold green]: [bold blue]{app}[/bold blue]\n")
 
 home_dir = Path("")
-data_dir = home_dir / "data" / "processedSamples"
+data_dir = home_dir / "data"
 data_file = data_dir / "calcs.parquet"
-raw_dir = home_dir / "raw" / "processedSamples"
+raw_dir = home_dir / "raw"
 
 parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
 parser.add_argument("--only-new-reactions", action="store_true", help="Update Results table with only reactions that have no associated results.")
@@ -106,6 +106,7 @@ print(rxns_no_results)
 def load_results(reactions, path, only_new_reactions=False):
     print("[bold green]Loading results from parquet files...[/bold green]")
     df = pd.read_parquet(path).rename(columns={"Sample IDs": "sample_id"})
+    df = df.explode("calcs")
     print(f"Loaded {len(df)} results from parquet file.")
     
     if only_new_reactions:
@@ -122,6 +123,8 @@ def load_results(reactions, path, only_new_reactions=False):
 
 # Load in Results
 df = load_results(reactions, data_file, only_new_reactions=only_new_reactions)
+calcs = pd.json_normalize(df["calcs"]).set_index(df.index)
+df = pd.concat([df.drop("calcs", axis=1), calcs], axis=1)
 
 # Load Samples from Airtable
 print("[bold green]Retrieving samples from Airtable...[/bold green]")
@@ -157,6 +160,7 @@ print(f"[bold green]Total results to update:[/bold green] {len(df_results)}\n")
 # Get Results from Airtable
 if not only_new_reactions:
     def get_results(result):
+        if not result: return None
         return {
             "result_id": result.id,
             "rxn_id": result.reaction[0].id,
@@ -164,7 +168,16 @@ if not only_new_reactions:
         }
     print("[bold green]Retrieving results from Airtable...[/bold green]\n")
     airtable_results = Result.all()
-    results = pd.DataFrame(map(get_results, airtable_results))
+
+    if not airtable_results:
+        results = pd.DataFrame({
+            "result_id": [],
+            "rxn_id": [],
+            "well": []
+        })
+    else:
+        results = pd.DataFrame(map(get_results, airtable_results))
+    
     df_results = pd.merge(df_results, results, "left", on=["rxn_id", "well"])
     print(f"Total results to update: {len(df_results)}")
 
@@ -193,6 +206,7 @@ def get_metrics(row):
     return {    
         "well": row.get("well"),
         "dilution": row.get("dilution"),
+        "cutoff": row.get("cutoff"),
         "mpr": row.get("MPR"),
         "ms": row.get("MS"),
         "ttt": row.get("TtT"),
@@ -223,6 +237,7 @@ def update_result(row):
 
     if result:
         result.dilution = metrics.get("dilution")
+        result.cutoff = metrics.get("cutoff")
         result.mpr = metrics.get("mpr")
         result.ms = metrics.get("ms")
         result.ttt = metrics.get("ttt")
@@ -234,6 +249,7 @@ def update_result(row):
             reaction_id = reaction,
             dilution = metrics.get("dilution"),
             well = metrics.get("well"),
+            cutoff = metrics.get("cutoff"),
             mpr = metrics.get("mpr"),
             ms = metrics.get("ms"),
             ttt = metrics.get("ttt"),
@@ -266,4 +282,4 @@ if not dry_run:
     print(f"\nSaving {len(samples_to_save)} samples to Airtable.")
     Sample.batch_save(samples_to_save)
     print(f"\nSaving {len(results_to_save)} results to Airtable.")
-    Result.batch_save(results_to_save)
+    Result.batch_save(results_to_save,)

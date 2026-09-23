@@ -10,19 +10,13 @@ main <- function() {
   threshold  <- 5
   norm_point <- 8
   print_progress <- FALSE
-  raw_cols <- c(
-    "Sample IDs", 
-    "Dilutions", 
-    "Well", 
-    "Assay", 
-    "Reaction", 
-    "Time", 
-    "RFU", 
-    "Norm", 
-    "Deriv"
-  )
-  
-  plan(multisession, workers = parallel::detectCores() - 1)
+  cutoffs <- seq(12, 72, by = 12)
+  grouping_cols <- c("Sample IDs", "Dilutions", "Well", "Assay", "Reaction")
+  raw_cols <- c(grouping_cols, "Time",  "RFU",  "Norm",  "Deriv")
+  n_cores <- parallel::detectCores(logical = FALSE) - 1
+
+  cli_alert_info(sprintf(" Using %s cores", n_cores))
+  plan(multisession, workers = n_cores)
 
   extract_file_meta <- function(x, pattern) {
     pattern_count <- str_count(x, pattern)
@@ -49,7 +43,26 @@ main <- function() {
       suppressWarnings()
   }
 
-  user_input <- readline("Only new reactions will be updated. Continue [Y] or update all [n]? ")
+  get_calcs <- function(cutoff, df) {
+    df_cutoff <- df %>%
+      summarize(
+        Time = max(Time),
+        .by = all_of(grouping_cols)
+      ) %>%
+      filter(Time >= cutoff) %>%
+      select(-Time)
+
+    df %>%
+      inner_join(df_cutoff, by = grouping_cols) %>%
+      filter(Time <= cutoff) %>%
+      calculate_metrics(grouping_cols, threshold = threshold) %>%
+      mutate(
+        cutoff = cutoff,
+        crossed = MPR > threshold
+      )
+  }
+
+  user_input <- readline(" Only new reactions will be updated. Continue [Y] or update all [n]? ")
   user_happy <- tolower(user_input) == "y"
   if (!user_happy) only_new <- FALSE
 
@@ -72,14 +85,12 @@ main <- function() {
 
   if (length(files) == 0) return(print("No new files to update"))
 
+  cli_alert_info(" Extracting Raw Data... ")
   df_ <- future_map_dfr(files, get_raw, progress = print_progress, cols = raw_cols, .progress = TRUE)
 
-  calcs <- calculate_metrics(
-    df_,
-    "Sample IDs", "Dilutions", "Well", "Assay", "Reaction",
-    threshold = threshold
-  ) %>%
-    mutate(crossed = MPR > threshold)
+  cli_alert_info("\n Calculating Metrics... ")
+  calcs <- future_map_dfr(cutoffs, get_calcs, df = df_, .progress = TRUE) %>%
+    nest(.by=grouping_cols, .key = "calcs")
 
   if (only_new) {
     df_    <- bind_rows(existing_raw_df, df_)
@@ -87,7 +98,8 @@ main <- function() {
   }
 
   df_ <- df_ %>%
-    nest(.by=c(`Sample IDs`, Well, Dilutions, Assay, Reaction), .key = "data") %>%
+    nest(.by=grouping_cols, .key = "data") %>%
+    full_join(calcs, by = all_of(grouping_cols)) %>%
     rename(sample = `Sample IDs`, well = Well, dilution = Dilutions, assay = Assay, rxn_name = Reaction)
   
   write_parquet(df_, "data/raw.parquet")
