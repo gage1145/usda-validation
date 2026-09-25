@@ -5720,7 +5720,7 @@
     },
     "quicR": {
       "Package": "quicR",
-      "Version": "3.2.0",
+      "Version": "3.2.1",
       "Source": "GitHub",
       "Title": "RT-QuIC Data Formatting and Analysis",
       "Authors@R": "person( given = \"Gage\", family = \"Rowden\", email = \"gage.rowden1145@gmail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-7517-0480\") )",
@@ -5749,8 +5749,7 @@
         "testthat (>= 3.1.0)"
       ],
       "Config/testthat/edition": "3",
-      "Config/roxygen2/version": "8.0.0",
-      "RoxygenNote": "8.0.0",
+      "Config/roxygen2/version": "8.1.0",
       "Author": "Gage Rowden [aut, cre] (ORCID: <https://orcid.org/0000-0002-7517-0480>)",
       "Maintainer": "Gage Rowden <gage.rowden1145@gmail.com>",
       "RemoteType": "github",
@@ -5758,7 +5757,7 @@
       "RemoteUsername": "gage1145",
       "RemoteRepo": "quicR",
       "RemoteRef": "main",
-      "RemoteSha": "add715d844774a548a86120f9eeea9dd00e82bc0"
+      "RemoteSha": "8ef291da8e588b549daa6ca921d4fe22f08b6ce6"
     },
     "ragg": {
       "Package": "ragg",
