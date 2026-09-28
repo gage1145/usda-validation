@@ -5,7 +5,17 @@ library(quicR)
 library(lubridate)
 library(arrow)
 library(ggrepel)
+library(scales)
 
+
+main_theme <- theme(
+  plot.title = element_text(size=24, hjust=0.5),
+  axis.title = element_text(size=20),
+  axis.text = element_text(size=12),
+  strip.text = element_text(size=16, face="bold"),
+  legend.title = element_text(size=12),
+  legend.text = element_text(size=12)
+)
 
 threshold <- 5
 norm_point <- 3
@@ -13,6 +23,7 @@ lod_cutoff <- 0.95
 files <- list.files("raw/limit-of-detection", ".xlsx", full.names = TRUE, recursive = TRUE)
 groups <- c("Sample IDs", "Well", "Dilutions", "Reaction", "Assay", "date", "reader", "tech")
 lower_groups <- c("dilution", "group", "sample_type", "assay", "mpr", "auc", "ms")
+metrics <- c("mpr", "auc", "ms")
 
 extract_file_meta <- function(x, pattern, n) {
   str_split_i(x, pattern, n) %>%
@@ -23,6 +34,15 @@ norm_eq <- function(x, mu, sigma) {
   term_1 <- 1 / (sigma * sqrt(2 * pi))
   term_2 <- exp(-((x - mu) ^ 2 / (2 * sigma ^ 2)))
   term_1 * term_2
+}
+
+# One-sided Mahalanobis distance from the negative control distribution.
+# Deviations below the negative mean are set to 0 so that only
+# higher-than-negative values count toward the distance.
+maha_dist <- function(x, mu, sigma) {
+  x <- sweep(as.matrix(x), 2, mu)
+  x <- pmax(x, 0)
+  sqrt(mahalanobis(x, center = rep(0, length(mu)), cov = sigma))
 }
 
 get_raw <- function(file, np, w, zero) {
@@ -48,39 +68,58 @@ get_raw <- function(file, np, w, zero) {
     suppressWarnings()
 }
 
-df_neg <- read_parquet("data/data_dump.parquet") %>%
+df_neg_wide <- read_parquet("data/data_dump.parquet") %>%
+  # mutate(across(c(mpr, auc, ms), log)) %>%
   select(all_of(lower_groups)) %>%
-  filter(group == "Negative Control" & sample_type == "PLN" & assay == "RT-QuIC") %>%
-  pivot_longer(c(mpr, auc, ms), names_to = "metric", values_to = "value") 
+  filter(group == "Negative Control" & sample_type == "PLN" & assay == "RT-QuIC")
+
+# Negative control center and covariance for the combined metric
+mu_neg <- colMeans(df_neg_wide[metrics])
+sigma_neg <- cov(df_neg_wide[metrics])
+
+df_neg <- df_neg_wide %>%
+  mutate(combined = maha_dist(pick(all_of(metrics)), mu_neg, sigma_neg)) %>%
+  pivot_longer(c(all_of(metrics), combined), names_to = "metric", values_to = "value")
 
 df_neg_sum <- df_neg %>%
   summarize(
+    total = n(),
     min = min(value),
     max = max(value),
     mean = mean(value),
     sd = sd(value),
-    lob = mean(value) + 1.645 * sd(value),
+    # The combined distance is not normal, so its LoB is the empirical 95th percentile
+    lob = if (cur_group()$metric == "combined") {
+      quantile(value, 0.95, names = FALSE)
+    } else {
+      mean(value) + 1.645 * sd(value)
+    },
     distro = list(tibble(
-      x = seq(min, max, length.out = 1000),
+      x = seq(0, max, length.out = 10000),
       y = norm_eq(x, mean, sd),
+      cum_y = cumsum(y),
       alpha = x >= lob
     )), 
-    .by = c(metric, group)
+    .by = c(metric, group, dilution)
   )
 
-df_raw <- map_dfr(files, get_raw, np = norm_point, w = 3, zero = T)
+df_raw <- map_dfr(files, get_raw, np = norm_point, w = 3, zero = F)
 
 df_cal <- calculate_metrics(df_raw, groups, threshold = threshold)  %>%
   filter(`Sample IDs` == "141234") %>%
   rename_with(tolower) %>%
   rename(dilution = dilutions) %>%
-  mutate(group = "Positive Control") %>%
+  mutate(
+    # across(c(mpr, auc, ms), log),
+    group = "Positive Control"
+  ) %>%
   select(all_of(lower_groups[-which(lower_groups == "sample_type")])) %>%
-  pivot_longer(c(mpr, auc, ms), names_to = "metric", values_to = "value") %>%
+  mutate(combined = maha_dist(pick(all_of(metrics)), mu_neg, sigma_neg)) %>%
+  pivot_longer(c(all_of(metrics), combined), names_to = "metric", values_to = "value") %>%
   full_join(select(df_neg_sum, metric, lob), by = "metric") 
 
 df_lod <- df_cal %>%
-  filter(dilution > -9) %>%
+  filter(dilution >= -9) %>%
   summarize(
     total = n(),
     min = min(value),
@@ -103,8 +142,9 @@ df_lod <- df_cal %>%
   ) %>%
   mutate(
     distro = list(tibble(
-      x = seq(min, max, length.out = 1000),
+      x = seq(0, max, length.out = 10000),
       y = norm_eq(x, mean, sd),
+      cum_y = cumsum(y),
       alpha = x >= lob
     )),
     max_p = sapply(distro, function(x) max(x$y)),
@@ -131,20 +171,33 @@ df_lod %>%
   theme_bw() +
   theme(legend.position = "bottom")
 
+color_palette <- c("-3" = "#000000", "-6" = "#005c3d", "-7" = "#118f5a", "-8" = "#38b48f", "-9" = "#5adfb3")
+
 df_lod %>%
   unnest(distro) %>%
-  mutate(across(dilution, as.factor)) %>%
+  mutate(
+    dilution = as.factor(dilution)
+  ) %>%
+  filter(metric == "combined") %>%
   ggplot(aes(x, y, color = dilution, linetype = group)) +
   geom_ribbon(aes(ymin = 0, ymax = y, fill = dilution, alpha = alpha), show.legend = FALSE) +
-  geom_vline(aes(xintercept = lob), data = df_neg_sum, inherit.aes = FALSE) +
+  geom_vline(aes(xintercept = lob), data = df_neg_sum %>%filter(metric == "combined"), inherit.aes = FALSE) +
   geom_label_repel(
     aes(
-      x = mean, y = max_p, 
+      x = mean, y = max_p, fill = as.factor(dilution),
       label = sprintf("Dilution: %s\nOverlap: %s", dilution, signif(1 - p_detect, 3))
     ), 
-    data = df_lod, inherit.aes = FALSE, hjust = 0.5, alpha = 0.5, min.segment.length = 0) +
+    data = df_lod %>% filter(metric == "combined"), inherit.aes = FALSE, hjust = 0.5, alpha = 0.5, min.segment.length = 0,
+    show.legend = FALSE, nudge_y = 0.005, ylim = c(0.005, NA) 
+  ) +
+  scale_fill_manual(values = color_palette) +
+  scale_color_manual(values = color_palette) +
   scale_alpha_manual(values = c(0, 0.5)) +
   # scale_x_log10() +
-  facet_wrap(~ metric, scales = "free") +
-  theme_bw() 
-
+  # facet_wrap(~ metric, scales = "free") +
+  labs(x = "", y = "Probability Density") +
+  main_theme +
+  theme(
+    axis.title.x = element_blank(),
+  )
+ggsave("limit_of_detection.png", path="figures/lod", width = 12, height = 8)
