@@ -4,10 +4,12 @@ library(tidyverse)
 library(quicR)
 library(lubridate)
 library(arrow)
+library(ggrepel)
 
 
 threshold <- 5
 norm_point <- 3
+lod_cutoff <- 0.95
 files <- list.files("raw/limit-of-detection", ".xlsx", full.names = TRUE, recursive = TRUE)
 groups <- c("Sample IDs", "Well", "Dilutions", "Reaction", "Assay", "date", "reader", "tech")
 lower_groups <- c("dilution", "group", "sample_type", "assay", "mpr", "auc", "ms")
@@ -59,8 +61,9 @@ df_neg_sum <- df_neg %>%
     sd = sd(value),
     lob = mean(value) + 1.645 * sd(value),
     distro = list(tibble(
-      x = seq(min, max, length.out = 100),
-      y = norm_eq(x, mean, sd)
+      x = seq(min, max, length.out = 1000),
+      y = norm_eq(x, mean, sd),
+      alpha = x >= lob
     )), 
     .by = c(metric, group)
   )
@@ -77,6 +80,7 @@ df_cal <- calculate_metrics(df_raw, groups, threshold = threshold)  %>%
   full_join(select(df_neg_sum, metric, lob), by = "metric") 
 
 df_lod <- df_cal %>%
+  filter(dilution > -9) %>%
   summarize(
     total = n(),
     min = min(value),
@@ -88,34 +92,59 @@ df_lod <- df_cal %>%
     .by = c(dilution, metric, group, lob)
   ) %>%
   mutate(
+    # Area of the fitted positive Gaussian above the negative control LoB
+    p_detect = pnorm(lob, mean, sd, lower.tail = FALSE),
+    detected = p_detect >= lod_cutoff
+  ) %>%
+  mutate(
     min = min(min),
     max = max(max),
     .by = c(metric)
   ) %>%
   mutate(
     distro = list(tibble(
-      x = seq(min, max, length.out = 100),
-      y = norm_eq(x, mean, sd)
+      x = seq(min, max, length.out = 1000),
+      y = norm_eq(x, mean, sd),
+      alpha = x >= lob
     )),
+    max_p = sapply(distro, function(x) max(x$y)),
     .by = c(dilution, metric, group, lob)
   ) %>%
-  full_join(df_neg_sum) 
+  full_join(df_neg_sum)
+
+# LoD: most dilute level where every more concentrated level also passes
+df_lod_cut <- df_lod %>%
+  filter(group == "Positive Control") %>%
+  arrange(metric, desc(dilution)) %>%
+  filter(cumall(detected), .by = metric) %>%
+  slice_min(dilution, n = 1, by = metric) %>%
+  select(metric, lod = dilution, p_detect, perc, max_p)
 
 df_lod %>%
-  ggplot(aes(dilution, perc, color = metric)) +
+  filter(group == "Positive Control") %>%
+  pivot_longer(c(perc, p_detect), names_to = "source", values_to = "rate") %>%
+  ggplot(aes(dilution, rate, color = metric, linetype = source)) +
   geom_point() +
   geom_line() +
+  geom_hline(yintercept = lod_cutoff, linetype = "dashed") +
   scale_x_continuous(n.breaks = length(unique(df_lod$dilution))) +
   theme_bw() +
   theme(legend.position = "bottom")
-
-low_conc_samp <- -6
 
 df_lod %>%
   unnest(distro) %>%
   mutate(across(dilution, as.factor)) %>%
   ggplot(aes(x, y, color = dilution, linetype = group)) +
-  geom_line() +
+  geom_ribbon(aes(ymin = 0, ymax = y, fill = dilution, alpha = alpha), show.legend = FALSE) +
+  geom_vline(aes(xintercept = lob), data = df_neg_sum, inherit.aes = FALSE) +
+  geom_label_repel(
+    aes(
+      x = mean, y = max_p, 
+      label = sprintf("Dilution: %s\nOverlap: %s", dilution, signif(1 - p_detect, 3))
+    ), 
+    data = df_lod, inherit.aes = FALSE, hjust = 0.5, alpha = 0.5, min.segment.length = 0) +
+  scale_alpha_manual(values = c(0, 0.5)) +
+  # scale_x_log10() +
   facet_wrap(~ metric, scales = "free") +
   theme_bw() 
 
