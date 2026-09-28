@@ -5,10 +5,10 @@ main <- function() {
   require(arrow)
   require(furrr)
   require(janitor)
+  source("globals.R")
   
+
   only_new <- TRUE
-  threshold  <- 5
-  norm_point <- 8
   print_progress <- FALSE
   cutoffs <- seq(12, 72, by = 12)
   grouping_cols <- c("Sample IDs", "Dilutions", "Well", "Assay", "Reaction")
@@ -43,28 +43,28 @@ main <- function() {
       suppressWarnings()
   }
 
-  get_calcs <- function(cutoff, df) {
+  get_calcs <- function(cutoff, df, by, thresh, ...) {
     df_cutoff <- df %>%
       summarize(
         Time = max(Time),
-        .by = all_of(grouping_cols)
+        .by = all_of(by)
       ) %>%
       filter(Time >= cutoff) %>%
       select(-Time)
 
     df %>%
-      inner_join(df_cutoff, by = grouping_cols) %>%
+      inner_join(df_cutoff, by = by) %>%
       filter(Time <= cutoff) %>%
-      calculate_metrics(grouping_cols, threshold = threshold) %>%
+      calculate_metrics(by, threshold = thresh) %>%
       mutate(
         cutoff = cutoff,
-        crossed = MPR > threshold
+        crossed = MPR > thresh
       )
   }
 
   user_input <- readline(" Only new reactions will be updated. Continue [Y] or update all [n]? ")
   user_happy <- tolower(user_input) == "y"
-  if (!user_happy) only_new <- FALSE
+  if (!user_happy) only_new <- !only_new
 
   files <- list.files("raw/processedSamples", ".xlsx", full.names = TRUE, recursive = TRUE)
 
@@ -89,7 +89,7 @@ main <- function() {
   df_ <- future_map_dfr(files, get_raw, progress = print_progress, cols = raw_cols, .progress = TRUE)
 
   cli_alert_info("\n Calculating Metrics... ")
-  calcs <- future_map_dfr(cutoffs, get_calcs, df = df_, .progress = TRUE) %>%
+  calcs <- map_dfr(cutoffs, get_calcs, df = df_, by = grouping_cols, thresh = threshold, .progress = TRUE) %>%
     nest(.by=grouping_cols, .key = "calcs")
 
   if (only_new) {

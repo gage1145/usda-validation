@@ -7,13 +7,20 @@ library(arrow)
 
 
 threshold <- 5
-norm_point <- 2
+norm_point <- 3
 files <- list.files("raw/limit-of-detection", ".xlsx", full.names = TRUE, recursive = TRUE)
 groups <- c("Sample IDs", "Well", "Dilutions", "Reaction", "Assay", "date", "reader", "tech")
+lower_groups <- c("dilution", "group", "sample_type", "assay", "mpr", "auc", "ms")
 
 extract_file_meta <- function(x, pattern, n) {
   str_split_i(x, pattern, n) %>%
     str_remove("\\.[[:alpha:]]+$")
+}
+
+norm_eq <- function(x, mu, sigma) {
+  term_1 <- 1 / (sigma * sqrt(2 * pi))
+  term_2 <- exp(-((x - mu) ^ 2 / (2 * sigma ^ 2)))
+  term_1 * term_2
 }
 
 get_raw <- function(file, np, w, zero) {
@@ -40,40 +47,62 @@ get_raw <- function(file, np, w, zero) {
 }
 
 df_neg <- read_parquet("data/data_dump.parquet") %>%
-  filter(group == "Negative Control" & sample_type == "PLN")
+  select(all_of(lower_groups)) %>%
+  filter(group == "Negative Control" & sample_type == "PLN" & assay == "RT-QuIC") %>%
+  pivot_longer(c(mpr, auc, ms), names_to = "metric", values_to = "value") 
 
-lob_mpr <- mean(df_neg$mpr) + 1.645 * sd(df_neg$mpr)
-lob_mpr
-lob_auc <- mean(df_neg$auc) + 1.645 * sd(df_neg$auc)
-lob_auc
-lob_ms  <- mean(df_neg$ms)  + 1.645 * sd(df_neg$ms)
-lob_ms
+df_neg_sum <- df_neg %>%
+  summarize(
+    min = min(value),
+    max = max(value),
+    mean = mean(value),
+    sd = sd(value),
+    lob = mean(value) + 1.645 * sd(value),
+    distro = list(tibble(
+      x = seq(min, max, length.out = 100),
+      y = norm_eq(x, mean, sd)
+    )), 
+    .by = c(metric, group)
+  )
 
 df_raw <- map_dfr(files, get_raw, np = norm_point, w = 3, zero = T)
+
 df_cal <- calculate_metrics(df_raw, groups, threshold = threshold)  %>%
   filter(`Sample IDs` == "141234") %>%
   rename_with(tolower) %>%
   rename(dilution = dilutions) %>%
-  mutate(group = "Positive Control")
+  mutate(group = "Positive Control") %>%
+  select(all_of(lower_groups[-which(lower_groups == "sample_type")])) %>%
+  pivot_longer(c(mpr, auc, ms), names_to = "metric", values_to = "value") %>%
+  full_join(select(df_neg_sum, metric, lob), by = "metric") 
 
 df_lod <- df_cal %>%
   summarize(
     total = n(),
-    n_mpr = sum(mpr > lob_mpr),
-    perc_mpr = n_mpr / total,
-    sd_mpr = sd(mpr),
-    n_auc = sum(auc > lob_auc),
-    perc_auc = n_auc / total,
-    sd_auc = sd(auc),
-    n_ms  = sum(ms  > lob_ms),
-    perc_ms  = n_ms  / total,
-    sd_ms  = sd(ms),
-    .by = c(dilution)
-  )
+    min = min(value),
+    max = max(value),
+    mean = mean(value),
+    sd = sd(value),
+    n = sum(value > lob),
+    perc = n / total,
+    .by = c(dilution, metric, group, lob)
+  ) %>%
+  mutate(
+    min = min(min),
+    max = max(max),
+    .by = c(metric)
+  ) %>%
+  mutate(
+    distro = list(tibble(
+      x = seq(min, max, length.out = 100),
+      y = norm_eq(x, mean, sd)
+    )),
+    .by = c(dilution, metric, group, lob)
+  ) %>%
+  full_join(df_neg_sum) 
 
 df_lod %>%
-  pivot_longer(cols = c(perc_mpr, perc_auc, perc_ms), names_to = "metric", values_to = "value") %>%
-  ggplot(aes(dilution, value, color = metric)) +
+  ggplot(aes(dilution, perc, color = metric)) +
   geom_point() +
   geom_line() +
   scale_x_continuous(n.breaks = length(unique(df_lod$dilution))) +
@@ -82,14 +111,11 @@ df_lod %>%
 
 low_conc_samp <- -6
 
-df_combined <- df_neg %>%
-  full_join(df_cal) %>%
-  pivot_longer(cols = c(mpr, auc, ms), names_to = "metric", values_to = "value")
-
-df_combined %>%
+df_lod %>%
+  unnest(distro) %>%
   mutate(across(dilution, as.factor)) %>%
-  ggplot(aes(value, color = dilution, linetype = group)) +
-  geom_density() +
+  ggplot(aes(x, y, color = dilution, linetype = group)) +
+  geom_line() +
   facet_wrap(~ metric, scales = "free") +
   theme_bw() 
 

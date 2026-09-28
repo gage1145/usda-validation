@@ -826,7 +826,8 @@
       "NeedsCompilation": "no",
       "Author": "Hadley Wickham [aut, cre]",
       "Maintainer": "Hadley Wickham <hadley@rstudio.com>",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "backports": {
       "Package": "backports",
@@ -2092,8 +2093,7 @@
       "NeedsCompilation": "no",
       "Author": "Folashade Daniel [cre], Microsoft Corporation [aut, cph], Steve Weston [aut], Dan Tenenbaum [ctb]",
       "Maintainer": "Folashade Daniel <fdaniel@microsoft.com>",
-      "Repository": "CRAN",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "dplyr": {
       "Package": "dplyr",
@@ -2304,8 +2304,7 @@
       "NeedsCompilation": "no",
       "Author": "Russell Lenth [aut, cre, cph]",
       "Maintainer": "Russell Lenth <russell-lenth@uiowa.edu>",
-      "Repository": "RSPM",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "evaluate": {
       "Package": "evaluate",
@@ -2496,8 +2495,7 @@
       "NeedsCompilation": "no",
       "Author": "Folashade Daniel [cre], Hong Ooi [ctb], Rich Calaway [ctb], Microsoft [aut, cph], Steve Weston [aut]",
       "Maintainer": "Folashade Daniel <fdaniel@microsoft.com>",
-      "Repository": "CRAN",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "forecast": {
       "Package": "forecast",
@@ -3863,8 +3861,7 @@
       "NeedsCompilation": "no",
       "Author": "Folashade Daniel [cre], Revolution Analytics [aut, cph], Steve Weston [aut]",
       "Maintainer": "Folashade Daniel <fdaniel@microsoft.com>",
-      "Repository": "CRAN",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "janitor": {
       "Package": "janitor",
@@ -4771,8 +4768,7 @@
       "NeedsCompilation": "yes",
       "Author": "Alan Genz [aut], Frank Bretz [aut], Tetsuhisa Miwa [aut], Xuefei Mi [aut], Friedrich Leisch [ctb], Fabian Scheipl [ctb], Bjoern Bornkamp [ctb] (ORCID: <https://orcid.org/0000-0002-6294-8185>), Martin Maechler [ctb] (ORCID: <https://orcid.org/0000-0002-8685-9910>), Torsten Hothorn [aut, cre] (ORCID: <https://orcid.org/0000-0001-8301-0471>)",
       "Maintainer": "Torsten Hothorn <Torsten.Hothorn@R-project.org>",
-      "Repository": "RSPM",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     },
     "nlme": {
       "Package": "nlme",
@@ -5721,7 +5717,7 @@
     "quicR": {
       "Package": "quicR",
       "Version": "3.2.1",
-      "Source": "GitHub",
+      "Source": "URL",
       "Title": "RT-QuIC Data Formatting and Analysis",
       "Authors@R": "person( given = \"Gage\", family = \"Rowden\", email = \"gage.rowden1145@gmail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-7517-0480\") )",
       "Description": "Designed for the curation and analysis of data generated from real-time quaking-induced conversion (RT-QuIC) assays first described by Atarashi et al. (2011) <doi:10.1038/nm.2294>. 'quicR' calculates useful metrics such as maxpoint ratio: Rowden et al. (2023) <doi:10.1099/vir.0.069906-0>; time-to-threshold: Shi et al. (2013) <doi:10.1186/2051-5960-1-44>; and maximum slope. Integration with the output from plate readers allows for seamless input of raw data into the R environment.",
@@ -5752,12 +5748,8 @@
       "Config/roxygen2/version": "8.1.0",
       "Author": "Gage Rowden [aut, cre] (ORCID: <https://orcid.org/0000-0002-7517-0480>)",
       "Maintainer": "Gage Rowden <gage.rowden1145@gmail.com>",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteUsername": "gage1145",
-      "RemoteRepo": "quicR",
-      "RemoteRef": "main",
-      "RemoteSha": "8ef291da8e588b549daa6ca921d4fe22f08b6ce6"
+      "RemoteType": "url",
+      "RemoteUrl": "https://github.com/gage1145/quicR/archive/refs/tags/v3.2.2.tar.gz"
     },
     "ragg": {
       "Package": "ragg",
@@ -8481,8 +8473,7 @@
       "NeedsCompilation": "yes",
       "Author": "Achim Zeileis [aut, cre] (ORCID: <https://orcid.org/0000-0003-0918-3766>), Gabor Grothendieck [aut], Jeffrey A. Ryan [aut], Joshua M. Ulrich [ctb], Felix Andrews [ctb]",
       "Maintainer": "Achim Zeileis <Achim.Zeileis@R-project.org>",
-      "Repository": "CRAN",
-      "Encoding": "UTF-8"
+      "Repository": "CRAN"
     }
   }
 }
