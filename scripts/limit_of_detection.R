@@ -173,14 +173,14 @@ df_pos_sum <- df_cal %>%
 df_lod <- bind_rows(df_neg_sum, df_pos_sum) %>%
   mutate(x_min = 0, x_max = max(max), .by = metric) %>%
   mutate(
+    metric = factor(metric, levels = c("mpr", "auc", "ms", "combined"), labels = c("MPR", "AUC", "MS", "Combined")),
     distro = pmap(list(x_min,x_max, mean, sd, lob, group == pos_group), make_distro),
     max_p = map_dbl(distro, \(d) max(d$y))
   ) %>%
   select(-c(x_min, x_max))
 
 df_lod_pos <- df_lod %>%
-  filter(group == pos_group) %>%
-  mutate(metric = factor(metric, levels = c("mpr", "auc", "ms", "combined"), labels = c("MPR", "AUC", "MS", "Combined")))
+  filter(group == pos_group)
 
 # LoD: most dilute level where every more concentrated level also passes
 df_lod_cut <- df_lod_pos %>%
@@ -204,7 +204,7 @@ df_lod_cut <- df_lod_pos %>%
 df_lod_pos %>%
   pivot_longer(c(perc, p_detect), names_to = "source", values_to = "rate") %>%
   mutate(
-    source = factor(source, levels = c("perc", "p_detect"), labels = c("Fraction of reps above LoD", "Area of fitted curve above LoD"))
+    source = factor(source, levels = c("perc", "p_detect"), labels = c("Fraction of reps above LoB", "Area of fitted curve above LoB"))
   ) %>%
   ggplot(aes(dilution, rate, color = source)) +
   geom_point() +
@@ -243,18 +243,19 @@ df_lod %>%
         label = sprintf("Dilution: %s\nOverlap: %s", dilution, signif(1 - p_detect, 3))),
     data = df_lod, 
     inherit.aes = FALSE,
-    alpha = 0.5,
+    size = 3,
+    alpha = 0.75,
     min.segment.length = 0, 
     max.iter = 10000,
     max.time = 2,
     force = 4,
     force_pull = 3, 
     xlim = c(NA, Inf),
-    ylim = c(NA, Inf),
+    # ylim = c(NA, Inf),
     hjust = 1,
     vjust = 1,
     box.padding = 1,
-    label.padding = 0.25,
+    label.padding = 0.1,
     seed = 71957427,
     # nudge_y = 0.1, nudge_x = -0.1, 
     show.legend = FALSE
@@ -263,8 +264,8 @@ df_lod %>%
   scale_color_brewer(3) +
   scale_linetype_manual(values = c("dashed", "solid")) +
   scale_alpha_manual(values = c(0, 0.5)) +
-  # scale_x_continuous(expand = expansion()) +
-  scale_x_log10(expand = expansion()) +
+  scale_x_continuous(expand = expansion()) +
+  # scale_x_log10(expand = expansion()) +
   facet_wrap(~metric, scales = "free") +
   labs(y = "Probability Density") +
   main_theme +
@@ -307,7 +308,31 @@ ex_labels <- ex_sum %>%
     )
   )
 
-ggplot(ex_curves, aes(x, y, color = label)) +
+# Negative graph
+ex_curves %>%
+  filter(label == "Negative") %>%
+  ggplot(aes(x, y), color = "blue") +
+  geom_ribbon(aes(ymin = 0, ymax = y), data = filter(ex_curves, shade, label == "Negative"), fill = "blue", alpha = 0.4, color = NA) +
+  geom_line(linewidth = 1, color = "blue") +
+  geom_vline(xintercept = ex_lob, linetype = "dashed") +
+  scale_x_continuous(limits = c(0, 20),expand = expansion(c(0, 0.01))) +
+  scale_y_continuous(expand = expansion(c(0, 0.05))) +
+  annotate(
+    "label", x = ex_lob, y = max(ex_labels$y) * 0.9, hjust = 0.4,
+    label = sprintf("LoB = %sth percentile of negatives", lob_quantile * 100)
+  ) +
+  labs(
+    title = "Example: Limit of Blank",
+    x = "Metric Value",
+    y = "Probability Density",
+  ) +
+  main_theme 
+ggsave("lob_example_neg.png", path = "figures/lod", width = 12, height = 8)
+
+
+# Full graph
+ex_curves %>%
+  ggplot(aes(x, y, color = label)) +
   geom_ribbon(aes(ymin = 0, ymax = y, fill = label), data = filter(ex_curves, shade), alpha = 0.4, color = NA) +
   geom_line(linewidth = 1) +
   geom_vline(xintercept = ex_lob, linetype = "dashed") +
