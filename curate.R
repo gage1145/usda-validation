@@ -90,7 +90,7 @@ main <- function() {
 
   cli_alert_info("\n Calculating Metrics... ")
   calcs <- map_dfr(cutoffs, get_calcs, df = df_, by = grouping_cols, thresh = threshold, .progress = TRUE) %>%
-    nest(.by=grouping_cols, .key = "calcs")
+    nest(.by=c(grouping_cols, "cutoff"), .key = "calcs")
 
   if (only_new) {
     df_    <- bind_rows(existing_raw_df, df_)
@@ -99,7 +99,7 @@ main <- function() {
 
   df_ <- df_ %>%
     nest(.by=grouping_cols, .key = "data") %>%
-    full_join(calcs, by = all_of(grouping_cols)) %>%
+    full_join(calcs, by = grouping_cols) %>%
     rename(sample = `Sample IDs`, well = Well, dilution = Dilutions, assay = Assay, rxn_name = Reaction)
   
   write_parquet(df_, "data/raw.parquet")
