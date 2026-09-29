@@ -90,7 +90,7 @@ main <- function() {
 
   cli_alert_info("\n Calculating Metrics... ")
   calcs <- map_dfr(cutoffs, get_calcs, df = df_, by = grouping_cols, thresh = threshold, .progress = TRUE) %>%
-    nest(.by=c(grouping_cols, "cutoff"), .key = "calcs")
+    nest(.by=c(grouping_cols), .key = "calcs")
 
   if (only_new) {
     df_    <- bind_rows(existing_raw_df, df_)
