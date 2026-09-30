@@ -5,6 +5,7 @@ main <- function() {
   require(arrow)
   require(furrr)
   require(janitor)
+  require(jsonlite)
   source("globals.R")
   
 
@@ -12,6 +13,7 @@ main <- function() {
   print_progress <- FALSE
   cutoffs <- seq(12, 72, by = 12)
   grouping_cols <- c("Sample IDs", "Dilutions", "Well", "Assay", "Reaction")
+  metrics <- c("cutoff", "MPR", "MS", "AUC")
   raw_cols <- c(grouping_cols, "Time",  "RFU",  "Norm",  "Deriv")
   n_cores <- parallel::detectCores(logical = FALSE) - 1
 
@@ -90,6 +92,7 @@ main <- function() {
 
   cli_alert_info("\n Calculating Metrics... ")
   calcs <- map_dfr(cutoffs, get_calcs, df = df_, by = grouping_cols, thresh = threshold, .progress = TRUE) %>%
+    select(all_of(c(grouping_cols, metrics))) %>%
     nest(.by=c(grouping_cols), .key = "calcs")
 
   if (only_new) {
@@ -100,10 +103,13 @@ main <- function() {
   df_ <- df_ %>%
     nest(.by=grouping_cols, .key = "data") %>%
     full_join(calcs, by = grouping_cols) %>%
-    rename(sample = `Sample IDs`, well = Well, dilution = Dilutions, assay = Assay, rxn_name = Reaction)
+    rename(sample = `Sample IDs`, well = Well, dilution = Dilutions, assay = Assay, rxn_name = Reaction) %>%
+    mutate(
+      across(c(data, calcs), ~ map_chr(., toJSON, auto_unbox = TRUE, .progress = TRUE))
+    )
   
   write_parquet(df_, "data/raw.parquet")
-  write_parquet(calcs, "data/calcs.parquet")
+#   write_parquet(calcs, "data/calcs.parquet")
 }
 
 main()
