@@ -108,17 +108,14 @@ df_results = pd.DataFrame([
         "reaction_id": result.reaction_id,
         "dilution": result.dilution,
         "well": result.well,
-        "mpr": result.mpr,
-        "ms": result.ms,
-        "ttt": result.ttt,
-        "raf": result.raf,
-        "auc": result.auc
+        "data": result.data,
+        "calcs": result.calcs
     } for result in results
 ])
 df_results = resolve_links(df_results, ["sample_id", "reaction_id"])
 
 # Raw dataframe
-df_raw = pd.read_parquet("data/raw.parquet").drop(columns="sample")
+# df_raw = pd.read_parquet("data/raw.parquet").drop(columns="sample")
 
 # Merge dataframes
 print("Merging dataframes...")
@@ -128,7 +125,7 @@ df_merged = (
     .merge(df_samples, on="sample_id")
     .merge(df_sample_types, on="sample_type_id")
     .merge(df_animals, on="animal_id")
-    .merge(df_raw, on=["well", "dilution", "assay", "rxn_name"])
+    # .merge(df_raw, on=["well", "dilution", "assay", "rxn_name"])
 )
 print(f"  [dim]{len(df_merged)} rows[/dim]")
 

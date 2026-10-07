@@ -74,37 +74,11 @@ class Sample(Model):
     bilateral = F.CheckboxField("bilateral")
     process_date = F.DateField("process_date")
     technician_id = F.LinkField("technician_id", Technician, lazy=True)
-    # tech_name = F.LookupField("tech_name")
-    reactions = F.LinkField("reactions", Reaction, lazy=True)
 
     class Meta:
         api_key = KEY
         base_id = app
         table_name = "samples"
-
-class SampleReaction(Model):
-    junction_id = F.AutoNumberField("junction_id")
-    sample = F.LinkField("sample", Sample, lazy=True)
-    reaction = F.LinkField("reaction", Reaction, lazy=True)
-
-    class Meta:
-        api_key = KEY
-        base_id = app
-        table_name = "sample-reaction-junctions"
-
-# class Raw(Model):
-#     raw_id = F.AutoNumberField("raw_id")
-#     sample = F.LinkField("sample", Sample, lazy=True)
-#     reaction = F.LinkField("reaction", Reaction, lazy=True)
-#     dilution = F.NumberField("dilutions")
-#     well = F.SingleLineTextField("well")
-#     time = F.NumberField("time")
-#     value = F.NumberField("value")
-
-#     class Meta:
-#         api_key = KEY
-#         base_id = app
-#         table_name = "raw"
 
 class Result(Model):
     result_id = F.AutoNumberField("result_id")
@@ -112,12 +86,8 @@ class Result(Model):
     reaction_id = F.LinkField("reaction_id", Reaction, lazy=True)
     dilution = F.NumberField("dilution")
     well = F.SingleLineTextField("well")
-    cutoff = F.NumberField("cutoff")
-    mpr = F.NumberField("mpr")
-    ms = F.NumberField("ms")
-    ttt = F.NumberField("ttt")
-    raf = F.NumberField("raf")
-    auc = F.NumberField("auc")
+    data = F.SingleLineTextField("data")
+    calcs = F.SingleLineTextField("calcs")
 
     class Meta:
         api_key = KEY
