@@ -1,5 +1,6 @@
 main <- function() {
   require(tidyverse)
+  require(jsonlite)
   require(magrittr)
   require(parallel)
   require(janitor)
@@ -16,7 +17,7 @@ main <- function() {
   output_file <- "data/data.parquet"
   raw_dir <- "raw/processedSamples"
   cutoffs <- seq(12, 72, by = 12)
-  grouping_cols <- c("sample", "dilution", "well", "assay", "reaction")
+  grouping_cols <- c("sample", "dilution", "well", "assay", "rxn_name")
   raw_cols <- c(grouping_cols, "time", "rfu", "norm", "deriv")
   n_cores <- detectCores(logical = FALSE) - 1
 
@@ -42,7 +43,7 @@ main <- function() {
     data <- suppressWarnings(suppressMessages(get_quic(file, ...)))
     data$data %<>%
       mutate(
-        reaction = reaction,
+        rxn_name = reaction,
         assay = assay,
         sample = str_remove(sample, "-P"),
         dilution = -log10(as.numeric(dilution))
@@ -90,6 +91,7 @@ main <- function() {
   df_ %>%
     nest(.by = all_of(grouping_cols), .key = "data") %>%
     full_join(calcs, by = grouping_cols) %>%
+    mutate(across(where(is.list), ~ map_chr(., toJSON, auto_unbox = TRUE, .progress = TRUE))) %>%
     write_parquet(output_file)
 
   cli_alert_success(sprintf("\n Successfully wrote to %s", output_file))
