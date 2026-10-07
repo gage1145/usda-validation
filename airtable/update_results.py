@@ -21,7 +21,7 @@ print(f"[bold green]Connected to Airtable Base[/bold green]: [bold blue]{app}[/b
 
 home_dir = Path("")
 data_dir = home_dir / "data"
-data_file = data_dir / "raw.parquet"
+data_file = data_dir / "data.parquet"
 raw_dir = home_dir / "raw"
 
 parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
@@ -105,8 +105,7 @@ print(rxns_no_results)
 
 def load_results(reactions, path, only_new_reactions=False):
     print("[bold green]Loading results from parquet files...[/bold green]")
-    df = pd.read_parquet(path)#.rename(columns={"Sample IDs": "sample_id"})
-    # df = df.explode("calcs")
+    df = pd.read_parquet(path)
     print(f"Loaded {len(df)} results from parquet file.")
     
     if only_new_reactions:
@@ -165,7 +164,7 @@ if not only_new_reactions:
         return result_map
 
     print("[bold green]Retrieving results from Airtable...[/bold green]\n")
-    airtable_results = Result.all()
+    airtable_results = Result.all(memoize=True)
     results = pd.DataFrame(map(get_results, airtable_results))
     if results.empty: 
         results = pd.DataFrame({"id": [], "rxn_id": [], "well": []})
@@ -203,7 +202,7 @@ def get_metrics(row):
     }
 
 def get_result(row):
-    result_id = row.get("result_id")
+    result_id = row.get("id")
     if pd.isna(result_id):
         return None
     results = [result for result in airtable_results if result_id == result.id]
