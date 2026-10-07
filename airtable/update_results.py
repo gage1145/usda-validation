@@ -21,7 +21,7 @@ print(f"[bold green]Connected to Airtable Base[/bold green]: [bold blue]{app}[/b
 
 home_dir = Path("")
 data_dir = home_dir / "data"
-data_file = data_dir / "calcs.parquet"
+data_file = data_dir / "raw.parquet"
 raw_dir = home_dir / "raw"
 
 parser = argparse.ArgumentParser(description="Update Airtable with new reactions and results.")
@@ -105,8 +105,8 @@ print(rxns_no_results)
 
 def load_results(reactions, path, only_new_reactions=False):
     print("[bold green]Loading results from parquet files...[/bold green]")
-    df = pd.read_parquet(path).rename(columns={"Sample IDs": "sample_id"})
-    df = df.explode("calcs")
+    df = pd.read_parquet(path)#.rename(columns={"Sample IDs": "sample_id"})
+    # df = df.explode("calcs")
     print(f"Loaded {len(df)} results from parquet file.")
     
     if only_new_reactions:
@@ -117,14 +117,12 @@ def load_results(reactions, path, only_new_reactions=False):
         
         print("[bold yellow]Filtering to only reactions with no associated results...[/bold yellow]\n")
         reactions = filter_new_reactions(reactions)
-        df = df.loc[df["Reaction"].isin(reactions)]
+        df = df.loc[df["rxn_name"].isin(reactions)]
 
     return df
 
 # Load in Results
 df = load_results(reactions, data_file, only_new_reactions=only_new_reactions)
-calcs = pd.json_normalize(df["calcs"]).set_index(df.index)
-df = pd.concat([df.drop("calcs", axis=1), calcs], axis=1)
 
 # Load Samples from Airtable
 print("[bold green]Retrieving samples from Airtable...[/bold green]")
@@ -134,8 +132,8 @@ print(f"[bold green]Retrieved {len(airtable_samples)} samples from Airtable.[/bo
 # Pull in Samples and Reactions from Airtable
 sample_df = pd.DataFrame([
     {
-        "id": sample.id,
-        "sample_id": sample.sample
+        "sample_id": sample.id,
+        "sample": sample.sample
     }
     for sample in airtable_samples
 ])
@@ -150,41 +148,35 @@ rxn_df = pd.DataFrame([
 rxn_df = rxn_df.loc[rxn_df["rxn_name"].isin(reactions)]
 
 # Merge Results with Sample and Reaction IDs
-df_results = df.rename(columns={'Reaction': 'rxn_name', "Well": "well", "Dilutions": "dilution"})
-df_results = df_results.merge(rxn_df, "left", on="rxn_name")
-df_results = df_results.merge(sample_df, "left", on="sample_id")
-df_results = df_results[pd.notnull(df_results.id)]
+df_results = df.merge(rxn_df, "left", on="rxn_name").merge(sample_df, "left", on="sample")
+df_results = df_results[pd.notnull(df_results.sample_id)]
 
 print(f"[bold green]Total results to update:[/bold green] {len(df_results)}\n")
 
 # Get Results from Airtable
 if not only_new_reactions:
+
     def get_results(result):
-        if not result: return None
-        return {
-            "result_id": result.id,
-            "rxn_id": result.reaction[0].id,
-            "well": result.well
-        }
+        result_map = {"id": None, "rxn_id": None, "well": None}
+        if result is not None: 
+            result_map.update(
+                {"id": result.id, "rxn_id": result.reaction_id[0].id, "well": result.well}
+            )
+        return result_map
+
     print("[bold green]Retrieving results from Airtable...[/bold green]\n")
     airtable_results = Result.all()
+    results = pd.DataFrame(map(get_results, airtable_results))
+    if results.empty: 
+        results = pd.DataFrame({"id": [], "rxn_id": [], "well": []})
 
-    if not airtable_results:
-        results = pd.DataFrame({
-            "result_id": [],
-            "rxn_id": [],
-            "well": []
-        })
-    else:
-        results = pd.DataFrame(map(get_results, airtable_results))
-    
-    df_results = pd.merge(df_results, results, "left", on=["rxn_id", "well"])
-    print(f"Total results to update: {len(df_results)}")
+df_results = pd.merge(df_results, results, "left", on=["rxn_id", "well"])
+print(f"Total results to update: {len(df_results)}")
 
 
 # Functions for Updating the Result Table
 def get_sample(row):
-    sample_id = row.get("id")
+    sample_id = row.get("sample_id")
     if pd.isna(sample_id):
         return None
     return [sample for sample in airtable_samples if sample_id == sample.id]
@@ -206,12 +198,8 @@ def get_metrics(row):
     return {    
         "well": row.get("well"),
         "dilution": row.get("dilution"),
-        "cutoff": row.get("cutoff"),
-        "mpr": row.get("MPR"),
-        "ms": row.get("MS"),
-        "ttt": row.get("TtT"),
-        "raf": row.get("RAF"),
-        "auc": row.get("AUC")
+        "data": row.get("data"),
+        "calcs": row.get("calcs")
     }
 
 def get_result(row):
@@ -237,24 +225,16 @@ def update_result(row):
 
     if result:
         result.dilution = metrics.get("dilution")
-        result.cutoff = metrics.get("cutoff")
-        result.mpr = metrics.get("mpr")
-        result.ms = metrics.get("ms")
-        result.ttt = metrics.get("ttt")
-        result.raf = metrics.get("raf")
-        result.auc = metrics.get("auc")
+        result.data = metrics.get("data")
+        result.calcs = metrics.get("calcs")
     else:
         result = Result(
             sample_id = sample,
             reaction_id = reaction,
             dilution = metrics.get("dilution"),
             well = metrics.get("well"),
-            cutoff = metrics.get("cutoff"),
-            mpr = metrics.get("mpr"),
-            ms = metrics.get("ms"),
-            ttt = metrics.get("ttt"),
-            raf = metrics.get("raf"),
-            auc = metrics.get("auc")
+            data = metrics.get("data"),
+            calcs = metrics.get("calcs")
         )
     return result
 
@@ -273,7 +253,7 @@ def update_sample_reaction(row):
     return sample
 
 # Update Samples with Reactions
-sample_rxn_df = df_results[["id", "rxn_id"]].groupby("id").agg(list).reset_index()
+sample_rxn_df = df_results[["sample_id", "rxn_id"]].groupby("sample_id").agg(list).reset_index()
 updated_samples = sample_rxn_df.progress_apply(update_sample_reaction, axis=1)
 samples_to_save = [sample for sample in updated_samples if sample]
 
