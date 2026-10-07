@@ -1,13 +1,10 @@
 library(tidyverse)
+library(magrittr)
 library(arrow)
 library(ggpubr)
 library(tidymodels)
-library(pROC)
 library(glmnet)
-library(ranger)
-library(kernlab)
-library(themis)
-library(vip)
+library(jsonlite)
 
 
 main_theme <- theme(
@@ -26,7 +23,21 @@ tidymodels::tidymodels_prefer()
 # You must run the data dump script before running this script.
 # It can be found at airtable/data_dump.py
 
-df_ <- read_parquet("data/data_dump.parquet")
+df_ <- read_parquet("data/data_dump.parquet") %>%
+  select(-data) %>%
+  mutate(
+    calcs = map(calcs, fromJSON),
+    sample_type = case_when(
+      str_detect(tolower(sample_type), "nasal") ~ "nasal swab",
+      str_detect(tolower(sample_type), "oral") ~ "oral swab",
+      TRUE ~ sample_type
+    )
+  ) %>%
+  unnest(calcs) %>%
+  filter(
+    str_detect(sample_type, "blood|swab", negate = TRUE),
+    cutoff > 12
+  )
 
 df_ctrl <- df_ %>%
   filter(str_detect(group, "Control") | mortem == "post-mortem" | mpi == 0)
@@ -37,225 +48,177 @@ df_unknown <- df_ %>%
 df_ctrl_sum <- df_ctrl %>%
   summarize(
     across(c(mpr, ms, auc), median),
-    .by = c(
-      sample_id, dilution, rxn_name, assay, sample_type, mortem, group, mpi, reader
-    )
+    .by = c(sample_id, dilution, rxn_name, assay, cutoff, sample_type, mortem, group, mpi, reader)
   ) %>%
   mutate(
+    # mpi == 0 samples were collected before any animals were infected.
     positive = factor(
-      group != "Negative Control",
+      group != "Negative Control" & !(mpi %in% 0),
       levels = c(FALSE, TRUE),
       labels = c("Negative", "Positive")
     )
   )
 
 
-# Pre-processing ---------------------------------------------------------
+# Model ------------------------------------------------------------------
 
 
-options(yardstick.event_first = FALSE)
-
-# 5-fold CV repeated 3 times for 15 assessment sets.
-set.seed(42)
-folds <- vfold_cv(df_ctrl_sum, v = 5, repeats = 3, strata = positive)
-
-# Generate a recipe that will apply equally to all folds.
-base_recipe <- recipe(
-  positive ~ mpr + ms + auc + dilution + assay + sample_type,
-  data = df_ctrl_sum
-) %>%
-  step_zv(all_predictors()) %>% # Remove predictors with zero variance.
-  step_normalize(all_numeric_predictors()) %>% # Center and scale numeric predictors.
-  step_dummy(all_nominal_predictors()) %>% # Encode factors into numeric columns.
-  step_interact(terms = ~ mpr * ms * auc) # Add interaction terms between metrics.
-
-# Check class balance before building the recipe.
-class_counts <- count(df_ctrl_sum, positive)
-imbalance_ratio <- max(class_counts$n) / min(class_counts$n)
-print(imbalance_ratio)
-
-# Interpolate values for the minority class if the ratio is greater than 3:1.
-if (imbalance_ratio > 3) {
-  base_recipe <- base_recipe %>% step_smote(positive, over_ratio = 0.8)
-}
-
-
-# Models -----------------------------------------------------------------
-
-
-# Logistic Regression
-lr_spec <- logistic_reg(penalty = tune(), mixture = tune()) %>%
-  set_engine("glmnet") %>%
-  set_mode("classification")
-
-# Random Forest
-rf_spec <- rand_forest(mtry = tune(), trees = 500, min_n = tune()) %>%
-  set_engine("ranger", importance = "impurity", probability = TRUE) %>%
-  set_mode("classification")
-
-# Support Vector Machine
-svm_spec <- svm_rbf(cost = tune(), rbf_sigma = tune()) %>%
-  set_engine("kernlab") %>%
-  set_mode("classification")
-
-
-# Workflow ---------------------------------------------------------------
-
-
-# Apply the recipe to the models.
-wf_set <- workflow_set(
-  preproc = list(base = base_recipe),
-  models  = list(logistic = lr_spec, rf = rf_spec, svm = svm_spec)
-) %>%
-  option_add( # Options for the logistic model.
-    grid = grid_regular(penalty(range = c(-4, 0)), mixture(), levels = 2), # 10
-    id = "base_logistic"
+# A small fixed ridge penalty keeps the fit stable when the classes are perfectly
+# separated, which plain glm does not. With 3 predictors there is little to tune.
+lr_wf <- workflow() %>%
+  add_recipe(
+    recipe(positive ~ mpr + ms + auc, data = df_ctrl_sum) %>%
+      step_zv(all_predictors()) %>% # Remove predictors with zero variance.
+      step_normalize(all_numeric_predictors()) # Center and scale numeric predictors.
   ) %>%
-  option_add( # Options for the random forest model.
-    grid = grid_space_filling(mtry(range = c(1, 9)), min_n(), size = 4), # 20
-    id = "base_rf"
-  ) %>%
-  option_add( # Options for the SVM model.
-    grid = grid_space_filling(cost(), rbf_sigma(), size = 4), # 20
-    id = "base_svm"
+  add_model(
+    logistic_reg(penalty = 0.01, mixture = 0) %>%
+      set_engine("glmnet") %>%
+      set_mode("classification")
   )
 
 # roc_auc is the primary ranking metric.
-# pr_auc (precision-recall AUC) is more informative than roc_auc under class imbalance.
-# j_index (Youden's J) summarizes the ROC curve at its optimal threshold.
 diag_metrics <- metric_set(roc_auc, pr_auc, j_index, sensitivity, specificity)
 
-# Parallelise across all cores minus one.
-doParallel::registerDoParallel(parallel::detectCores() - 1)
-
-
-# Run the workflow -------------------------------------------------------
-
-
-# Run the workflow.
-tuned_results <- wf_set %>%
-  workflow_map(
-    fn        = "tune_grid",
+# 5-fold CV repeated 3 times, grouped by sample so that no sample is in both
+# the analysis and assessment sets.
+fit_group <- function(data) {
+  folds <- group_vfold_cv(data, group = sample_id, v = 5, repeats = 3, strata = positive)
+  fit_resamples(
+    lr_wf,
     resamples = folds,
-    metrics   = diag_metrics,
-    control   = control_grid(save_pred = TRUE, parallel_over = "everything"),
-    verbose   = TRUE
+    metrics = diag_metrics,
+    control = control_resamples(save_pred = TRUE, event_level = "second")
+  )
+}
+
+# Each sample_type x dilution x assay x cutoff combination gets its own model.
+# Combinations need at least 5 samples of each class for 5-fold CV.
+df_groups <- df_ctrl_sum %>%
+  nest(data = -c(sample_type, dilution, assay, cutoff)) %>%
+  mutate(
+    n_neg = map_int(data, ~ n_distinct(.x$sample_id[.x$positive == "Negative"])),
+    n_pos = map_int(data, ~ n_distinct(.x$sample_id[.x$positive == "Positive"]))
   )
 
-# Summarise the best CV roc_auc for each workflow and rank them.
-rank_results(tuned_results, rank_metric = "roc_auc", select_best = TRUE) %>%
-  select(model, .metric, mean) %>%
-  pivot_wider(id_cols = c(model), names_from = .metric, values_from = c(mean))
-
-# Plot performance comparisons of the model families.
-autoplot(tuned_results, metric = "roc_auc") +
-  main_theme +
-  labs(title = "Model Comparison: ROC AUC")
-ggsave("model_comparison.png", path = "figures/tissues", width = 10, height = 6)
-
-
-# Extract best performing workflows --------------------------------------
-
-
-# Select the winning workflow IDs for each model family.
-best_wfs <- tuned_results %>%
-  rank_results(rank_metric = "roc_auc") %>%
-  filter(.metric == "roc_auc") %>%
-  group_by(wflow_id) %>%
-  slice_min(rank, n = 1) %>%
-  ungroup()
-
-# Select the all-around best workflow ID.
-best_wf_id <- best_wfs %>%
-  slice_min(rank) %>%
-  pull(wflow_id)
-
-# Pull the best parameters for each workflow.
-best_params <- map(
-  unique(best_wfs$wflow_id),
-  function(id) {
-    tuned_results %>%
-      extract_workflow_set_result(id = id) %>%
-      select_best(metric = "roc_auc")
-  }
-)
-
-# Generalize the final model to all available data.
-final_wfs <- map2(
-  best_wfs$wflow_id,
-  best_params,
-  function(id, params) {
-    tuned_results %>%
-      extract_workflow(id = id) %>%
-      finalize_workflow(params)
-  }
-)
-names(final_wfs) <- best_wfs$wflow_id
-
-final_fits <- map(final_wfs, fit, data = df_ctrl_sum)
-final_fit <- final_fits[[best_wf_id]]
-
-# Print the CV performance summary for the winning model: mean and standard error
-# of each metric across all folds. These are honest out-of-sample estimates.
-tuned_results %>%
-  extract_workflow_set_result(id = best_wf_id) %>%
-  collect_metrics() %>%
-  filter(.metric %in% c("roc_auc", "pr_auc", "j_index", "sensitivity", "specificity")) %>%
-  print(n = Inf)
-
-# Variable importance is only meaningful for the random forest model.
-if (grepl("rf", best_wf_id)) {
-  final_fit %>%
-    extract_fit_parsnip() %>%
-    vip()
-  ggsave("variable_importance.png", path = "figures/tissues", width = 8, height = 6)
+skipped <- df_groups %>%
+  filter(n_neg < 5 | n_pos < 5) %>%
+  distinct(sample_type, dilution, n_neg, n_pos)
+if (nrow(skipped) > 0) {
+  message("Skipping combinations with fewer than 5 samples in a class:")
+  print(skipped)
 }
+
+# Metrics are computed on the pooled out-of-fold predictions of each repeat, then
+# averaged across repeats. With only ~2 negatives per fold for some sample types,
+# per-fold AUCs are almost always 1 and averaging them overstates performance.
+pooled_metrics <- function(res) {
+  res %>%
+    collect_predictions() %>%
+    group_by(id) %>%
+    diag_metrics(truth = positive, .pred_Positive, estimate = .pred_class, event_level = "second") %>%
+    summarize(mean = mean(.estimate), std_err = sd(.estimate) / sqrt(n()), .by = .metric)
+}
+
+set.seed(42)
+results <- df_groups %>%
+  filter(n_neg >= 5, n_pos >= 5) %>%
+  mutate(
+    res = map(data, fit_group, .progress = TRUE),
+    metrics = map(res, pooled_metrics),
+    oof = map(res, collect_predictions, summarize = TRUE) # Out-of-fold predictions.
+  )
+
+
+# Compare combinations ---------------------------------------------------
+
+
+df_metrics <- results %>%
+  select(sample_type, dilution, assay, cutoff, metrics) %>%
+  unnest(metrics) %>%
+  select(sample_type, dilution, assay, cutoff, .metric, mean, std_err)
+
+# Rank combinations within each sample type. Any combination whose roc_auc is
+# within one standard error of the best is reported as equivalent.
+ranked <- df_metrics %>%
+  filter(.metric == "roc_auc") %>%
+  arrange(sample_type, desc(mean))
+
+best_by_type <- ranked %>%
+  slice_max(mean, n=2, by = c(sample_type, assay)) %>%
+  left_join(
+    df_metrics %>%
+      filter(.metric != "roc_auc") %>%
+      select(-std_err) %>%
+      pivot_wider(names_from = .metric, values_from = mean),
+    by = c("sample_type", "dilution", "assay", "cutoff")
+  )
+
+print(best_by_type, n = Inf)
+
+df_metrics %>%
+  filter(.metric == "pr_auc") %>%
+  ggplot(aes(factor(cutoff), factor(dilution), fill = mean)) +
+  geom_tile() +
+  geom_text(aes(label = round(mean, 2)), size = 3) +
+  facet_grid(sample_type~assay, scales = "free", space="free") +
+  coord_cartesian(expand = FALSE) +
+  scale_fill_viridis_c(limits = c(0.5, 1)) +
+  labs(
+    title = "Cross-validated ROC AUC",
+    x = "Cutoff",
+    y = "Dilution",
+    fill = "ROC AUC"
+  ) +
+  main_theme
+ggsave("model_comparison.png", path = "figures/tissues", width = 14, height = 8, bg = "white")
+
+
+# Final models -----------------------------------------------------------
+
+
+# Refit each combination on all of its data for predicting unknowns.
+final_fits <- results %>%
+  select(sample_type, dilution, assay, cutoff, data) %>%
+  mutate(fit = map(data, ~ fit(lr_wf, data = .x))) %>%
+  select(-data)
 
 
 # ROC --------------------------------------------------------------------
 
 
-df_pred <- map_dfr(
-  final_fits,
-  function(mod, df) {
-    mod %>%
-      augment(new_data = df) %>%
-      mutate(engine = extract_spec_parsnip(mod)$engine)
-  },
-  df = df_ctrl_sum
-)
+# ROC curves use out-of-fold predictions so they are not optimistic. For each
+# sample_type x dilution x assay, the cutoff with the best roc_auc is shown.
+best_cutoffs <- df_metrics %>%
+  filter(.metric == "roc_auc") %>%
+  slice_max(mean, n = 1, with_ties = FALSE, by = c(sample_type, dilution, assay))
 
-get_filtered_roc <- function(df, assay, sample_type, dilution, engine, ...) {
-  tryCatch(
-    {
-      df %>%
-        filter(assay == !!assay, sample_type == !!sample_type, dilution == !!dilution, engine == !!engine) %>%
-        roc(positive, .pred_Positive) %>%
-        coords() %>%
-        mutate(assay = assay, sample_type = sample_type, dilution = dilution, engine = engine)
-    },
-    error = function(e) {
-      return(NULL)
-    }
-  )
-}
-
-combos <- distinct(df_pred, assay, sample_type, dilution, engine)
-df_rocs <- pmap_dfr(combos, get_filtered_roc, df = df_pred, .progress = TRUE)
+df_rocs <- results %>%
+  semi_join(best_cutoffs, by = c("sample_type", "dilution", "assay", "cutoff")) %>%
+  mutate(roc = map(oof, ~ roc_curve(.x, positive, .pred_Positive, event_level = "second"))) %>%
+  select(sample_type, dilution, assay, cutoff, roc) %>%
+  unnest(roc)
 
 df_rocs %>%
   arrange(desc(specificity), sensitivity) %>%
-  ggplot(aes(x = 1 - specificity, y = sensitivity, color = engine, linetype = assay)) +
-  geom_line() +
+  ggplot(aes(x = 1 - specificity, y = sensitivity, color = assay)) +
+  geom_step(direction = "hv") +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
-  facet_grid(sample_type ~ dilution, labeller = label_parsed) +
-  scale_color_manual(values = c("red", "navy", "darkgreen")) +
+  facet_grid(sample_type~dilution) +
+  scale_color_manual(values = c("red", "navy")) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.25)) +
-  scale_y_continuous(breaks = seq(0, 1, by = 0.25), position = "right") +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.25)) +
   coord_equal() +
   labs(
     x = "1 - Specificity",
     y = "Sensitivity",
+  ) +
+  main_theme +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(0.85, 0.9),
+    legend.title = element_blank(),
+    # legend.background = element_blank()
   )
 ggsave("roc1.png", path = "figures/tissues", width = 10, height = 12)
 
@@ -264,42 +227,31 @@ ggsave("roc1.png", path = "figures/tissues", width = 10, height = 12)
 
 
 df_cor <- df_ctrl_sum %>%
-  select(mpr, ms, auc, positive, assay) %>%
-  rename_with(~ paste0("log_", .), c(mpr, ms, auc)) %>%
-  mutate(
-    mpr = exp(log_mpr),
-    ms = exp(log_ms),
-    auc = exp(log_auc),
-    positive = as.character(positive)
-  )
+  select(mpr, ms, auc, positive, assay, cutoff, sample_type) %>%
+  mutate(across(c(mpr, ms, auc), ~ .x + abs(min(.x)))) %>%
+  mutate(across(c(mpr, ms, auc), log)) %>%
+  mutate(cutoff = factor(cutoff, levels = sort(unique(cutoff)), labels = paste(sort(unique(cutoff)), "hr"))) %>%
+  arrange(desc(positive))
 
 metric_combos <- c("mpr", "ms", "auc") %>%
   combn(2) %>%
   t() %>%
   as.data.frame() %>%
-  rename(x = 1, y = 2) %>%
-  bind_rows(
-    mutate(
-      .,
-      across(everything(), ~ paste0("log_", .x)),
-      .keep = "unused"
-    )
-  )
+  rename(x = 1, y = 2)
 
-make_cor_plot <- function(df, x, y, color_group, shape_group, alpha = 0.1) {
+make_cor_plot <- function(df, x, y, color_group, alpha = 0.1) {
   df %>%
     ggplot(aes(.data[[x]], .data[[y]])) +
     geom_point(
-      aes(color = .data[[color_group]], shape = .data[[shape_group]]),
-      alpha = alpha, size = 3
+      aes(color = .data[[color_group]]),
+      alpha = alpha, size = 2
     ) +
-    scale_color_manual(values = c("navy", "red")) +
-    scale_shape_manual(values = c(1, 2)) +
+    scale_color_manual(values = c("darkblue", "darkorange")) +
+    facet_grid(cols=vars(cutoff)) +
     labs(
       x = toupper(x),
       y = toupper(y),
-      color = str_to_title(color_group),
-      shape = str_to_title(shape_group)
+      color = str_to_title(color_group)
     ) +
     guides(
       color = guide_legend(override.aes = list(alpha = 1, size = 6, shape = "square")),
@@ -318,29 +270,13 @@ cor_plots <- pmap(
   make_cor_plot,
   df = df_cor,
   color_group = "positive",
-  shape_group = "assay",
-  alpha = 0.5
+  alpha = 0.1
 )
 
 ggarrange(
-  plotlist = cor_plots, align = "hv", legend = "bottom",
+  plotlist = cor_plots, align = "hv", legend = "bottom", ncol=1,
   common.legend = TRUE, font.label = list(size = 30)
-) %>%
-  annotate_figure(
-    top = text_grob(
-      "Metric Correlation",
-      color = "black",
-      face = "bold",
-      size = 30
-    ),
-    left = text_grob(
-      "Log-transformed         |         Untransformed",
-      color = "black",
-      face = "bold",
-      size = 30,
-      rot = 90
-    )
-  )
+) 
 
 ggsave("corplot.png", path = "figures/tissues", width = 16, height = 12, bg = "white")
 
@@ -351,19 +287,26 @@ ggsave("corplot.png", path = "figures/tissues", width = 16, height = 12, bg = "w
 df_unknown_sum <- df_unknown %>%
   summarize(
     across(c(mpr, ms, auc), median),
-    .by = c(sample_id, dilution, rxn_name, assay, sample_type, mortem, group, mpi, reader)
+    .by = c(sample_id, dilution, rxn_name, assay, cutoff, sample_type, mortem, group, mpi, reader)
   )
 
-df_unknown_preds <- augment(final_fit, new_data = df_unknown_sum)
+# Each unknown is scored by the model for its own combination. Combinations
+# without a model (e.g. no labelled positives) are dropped.
+df_unknown_preds <- df_unknown_sum %>%
+  nest(data = -c(sample_type, dilution, assay, cutoff)) %>%
+  inner_join(final_fits, by = c("sample_type", "dilution", "assay", "cutoff")) %>%
+  mutate(data = map2(fit, data, ~ augment(.x, new_data = .y))) %>%
+  select(-fit) %>%
+  unnest(data)
 
-positioning <- position_jitterdodge(jitter.width = 3, dodge.width = 3, seed = 45)
-
+# Only plot the recommended combinations.
 df_unknown_preds %>%
+  semi_join(best_by_type, by = c("sample_type", "dilution", "assay", "cutoff")) %>%
   arrange(mpi) %>%
   mutate(mpi = as.factor(mpi)) %>%
-  ggplot(aes(mpi, .pred_Positive, color = group, fill = group)) +
+  ggplot(aes(mpi, .pred_Positive, color = group)) +
   geom_boxplot() +
+  facet_wrap(~ sample_type + assay + dilution + cutoff, labeller = label_both) +
   scale_color_manual(values = c("navy", "red")) +
-  scale_fill_manual(values = c("navy", "red")) +
   labs(y = "P(Positive)", x = "MPI") +
   main_theme
