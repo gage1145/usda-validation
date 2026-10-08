@@ -1,36 +1,11 @@
-library(dplyr)
-library(ggplot2)
+library(tidyverse)
 library(ggridges)
+library(ggsignif)
+library(scales)
 library(ggpubr)
 library(forcats)
-library(stringr)
-library(airtabler)
-source("scripts/airtable_functions.R")
-library(janitor)
-
-
-
-# Retrieve data from Airtable ---------------------------------------------
-
-
-
-APP <- "app7KsgYl2jhOnYg7"
-
-# Get the necessary tables
-tables <- airtable(APP, c("animals", "samples", "results", "reactions"))
-
-animals <- tables$animals$select_all() %>%
-  rename("animal" = "animal_id")
-
-# Filter results for post-mortem samples
-results <- tables$results$select_all(
-  filterByFormula = "{mortem} = 'post-mortem'"
-)
-
-
-
-# Theme -------------------------------------------------------------------
-
+library(arrow)
+library(jsonlite)
 
 
 main_theme <- theme(
@@ -47,23 +22,19 @@ main_theme <- theme(
 
 
 
-df_ <- results %>%
-  mutate(across(everything(), as.character)) %>%
-  left_join(animals, by = "animal") %>%
-  clean_names() %>%
+df_ <- read_parquet("data/data_dump.parquet") %>%
+  filter(mortem == "post-mortem" & sample_type != "PLN") %>%
+  select(-data) %>%
   mutate(
-    across(c(sample_id, animal, sample_type, group, room_number), as.factor),
-    across(c(mpr, raf, ttt, ms, auc), as.numeric),
+    calcs = map(calcs, fromJSON),
+    across(where(is.character), as.factor),
     assay = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
-    dilution = factor(
-      dilution, 
-      levels=c(-2, -3, -4), 
-      # labels=c(bquote("10^{-2}"), bquote("10^{-3}"), bquote("10^{-4}"))
-    )
-  )
+    dilution = factor(dilution, levels=sort(unique(dilution))) 
+  ) %>%
+  unnest(calcs)
 
 df_sum <- df_ %>%
-  group_by(animal, dilution, assay, sample_type) %>%
+  group_by(animal_id, dilution, assay, sample_type) %>%
   summarize(
     median_raf = median(raf),
     std_err = sd(raf) / sqrt(n()),
@@ -79,7 +50,7 @@ df_sum <- df_ %>%
 
 
 df_sum %>%
-  ggplot(aes(fct_inorder(animal), y=median_raf, ymin=lower, ymax=upper, color=assay, group=assay, fill = assay)) +
+  ggplot(aes(fct_inorder(animal_id), y=median_raf, ymin=lower, ymax=upper, color=assay, group=assay, fill = assay)) +
   geom_line(linewidth=1) +
   geom_point() +
   geom_ribbon(alpha = 0.4, color = NA) +
@@ -92,7 +63,7 @@ df_sum %>%
   main_theme +
   theme(
     axis.title.x = element_blank(),
-    axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
+    axis.text.x = element_blank(), #element_text(angle=90, hjust=1, vjust=0.5),
     legend.position = c(0.85, 0.85),
     legend.title = element_blank(),
     legend.background = element_blank()
@@ -147,11 +118,9 @@ ggsave(
 # Mean RAF figures --------------------------------------------------------
 
 
-library(ggsignif)
-library(scales)
 
 df_animal <- df_ %>%
-  summarize(raf=mean(raf), .by=c(animal, sample_type, assay, dilution))
+  summarize(raf=mean(raf), .by=c(animal_id, sample_type, assay, dilution))
 
 df_ %>%
   group_by(sample_type, assay, dilution) %>%
