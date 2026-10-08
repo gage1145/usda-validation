@@ -6,6 +6,7 @@ library(lubridate)
 library(arrow)
 library(ggrepel)
 library(scales)
+library(jsonlite)
 
 
 main_theme <- theme(
@@ -29,27 +30,17 @@ pos_sample_id <- "141234"
 neg_group <- "Negative Control"
 pos_group <- "Positive Control"
 plot_metric <- "combined"
+data_file <- "data/data.parquet"
 
 files <- list.files("raw/limit-of-detection", ".xlsx", full.names = TRUE, recursive = TRUE)
-neg_groups <- c("sample", "well", "dilution", "reaction", "assay", "group")
+neg_groups <- c("sample", "well", "dilution", "rxn_name", "assay", "group")
 groups <- c(neg_groups, "date", "reader", "tech")
 metrics <- c("mpr", "auc", "ms")
-# lower_groups <- c("dilution", "group", "sample_type", "assay", "cutoff", metrics)
-# Grouping shared by the negative and positive summaries so they stay aligned
 summary_groups <- c("sample", "group", "metric", "dilution")
 
 extract_file_meta <- function(x, pattern, n) {
   str_split_i(x, pattern, n) %>%
     str_remove("\\.[[:alpha:]]+$")
-}
-
-rename_cols <- function(df) {
-  df %>%
-  rename(
-    sample = "Sample IDs",
-    dilution = "Dilutions"
-  ) %>%
-  rename_with(tolower)
 }
 
 # One-sided Mahalanobis distance from the negative control distribution.
@@ -112,11 +103,12 @@ get_raw <- function(file, np, w, zero) {
 
   file %>%
     get_quic(norm_point = np, window_size = w, zero = zero) %>%
+    as.data.frame() %>%
     mutate(
-      `Sample IDs` = str_remove(`Sample IDs`, "-P"),
-      Dilutions = -log10(as.numeric(Dilutions)),
-      Assay = assay,
-      Reaction = rxn,
+      sample = str_remove(sample, "-P"),
+      dilution = -log10(as.numeric(dilution)),
+      assay = assay,
+      rxn_name = rxn,
       date = date,
       reader = reader,
       tech = tech
@@ -125,9 +117,14 @@ get_raw <- function(file, np, w, zero) {
     suppressWarnings()
 }
 
-df_neg_wide <- read_parquet("data/calcs.parquet") %>%
-  unnest(where(is.list)) %>%
-  rename_cols() %>%
+
+# Load Data --------------------------------------------------------------
+
+
+df_neg_wide <- read_parquet(data_file) %>%
+  select(-data) %>%
+  mutate(calcs = map(calcs, fromJSON)) %>%
+  unnest(calcs) %>%
   filter(cutoff == time_cutoff & sample == "N" & assay == "RT-QuIC") %>%
   mutate(group = neg_group) %>%
   select(all_of(c(neg_groups, metrics)))
@@ -141,14 +138,10 @@ df_neg_sum <- df_neg_wide %>%
   summarize_values(lob = calc_lob(value, cur_group()$metric, lob_quantile), .by = summary_groups)
 
 df_raw <- map_dfr(files, get_raw, np = norm_point, w = window_size, zero = FALSE) %>%
-  rename_cols() %>%
   mutate(group = pos_group)
 
 df_cal <- df_raw %>%
-  calculate_metrics(
-    groups, time_col = "time", ttt_values = "norm", auc_values = "norm", 
-    norm_col = "norm", deriv_col = "deriv", threshold = threshold
-  ) %>%
+  calculate_metrics(groups, threshold = threshold) %>%
   rename_with(tolower) %>%
   filter(sample == pos_sample_id) %>%
   select(all_of(c(groups, metrics))) %>%
