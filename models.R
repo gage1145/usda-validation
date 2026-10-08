@@ -34,13 +34,16 @@ df_ <- read_parquet("data/data_dump.parquet") %>%
     )
   ) %>%
   unnest(calcs) %>%
-  filter(
-    str_detect(sample_type, "blood|swab", negate = TRUE),
-    cutoff > 12
-  )
+  filter(cutoff > 12)
 
 df_ctrl <- df_ %>%
-  filter(str_detect(group, "Control") | mortem == "post-mortem" | mpi == 0)
+  filter(str_detect(group, "Control") | mortem == "post-mortem" | mpi == 0 | mpi == max(mpi, na.rm=T), .by = animal_id)
+
+df_ctrl_rf <- df_ctrl %>%
+  filter(str_detect(sample_type, "blood|swab")) %>%
+  distinct(mpi, sample_type, mortem, group) %>%
+  filter(!is.na(mpi)) %>%
+  arrange(sample_type, mpi)
 
 df_unknown <- df_ %>%
   setdiff(df_ctrl)
