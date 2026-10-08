@@ -8,36 +8,7 @@ library(arrow)
 library(airtabler)
 library(janitor)
 library(scales)
-source("scripts/airtable_functions.R")
-
-
-
-# Load data from Airtable -------------------------------------------------
-
-
-
-APP <- "app7KsgYl2jhOnYg7"
-
-# Get the necessary tables
-tables <- airtable(APP, c("animals", "samples", "results", "reactions"))
-
-results <- tables$results$select_all(
-  filterByFormula = get_formula(
-    "sample_type", c("'MNPRO nasal swab'", "'NADC nasal swab'")
-  )
-) %>%
-  mutate(across(everything(), as.character))
-
-animals <- tables$animals$select_all() %>%
-  rename(animal = animal_id) %>%
-  mutate(across(everything(), as.character))
-
-
-
-
-
-# Themes ------------------------------------------------------------------
-
+library(jsonlite)
 
 
 main_theme <- theme(
@@ -50,24 +21,19 @@ main_theme <- theme(
 )
 
 
-
 # Load the data -----------------------------------------------------------
 
 
-
-df_ <- results %>%
-  left_join(animals, by="animal") %>%
-  filter(animal != "NULL") %>%
-  clean_names() %>%
+df_ <- read_parquet("data/data_dump.parquet") %>%
+  filter(str_detect(tolower(sample_type), "nasal")) %>%
+  select(-data) %>%
   mutate(
-    across(c(mpr, ms, ttt, raf, auc, mpi), as.numeric),
-    assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC"))
+    across(c("sample_id", "animal", "assay"), ~as.factor(as.character(.))),
+    calcs = map(calcs, fromJSON),
+    assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC")),
+    mpi = as.integer(mpi)
   ) %>%
-  mutate_at(
-    c("sample_id", "animal", "assay"),
-    ~as.factor(as.character(.))
-  ) %>%
-  mutate_at("mpi", as.integer)
+  unnest(calcs)
 
 df_sum <- df_ %>%
   group_by(sample_id, animal, mpi, dilution, assay) %>%
@@ -78,9 +44,7 @@ df_sum <- df_ %>%
   )
 
 
-
-# nasal Swab Boxplot -------------------------------------------------------
-
+# Nasal Swab Boxplot -------------------------------------------------------
 
 
 df_ %>%

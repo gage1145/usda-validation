@@ -1,43 +1,10 @@
-library(dplyr)
-library(ggplot2)
+library(tidyverse)
 library(ggridges)
 library(ggpubr)
-library(forcats)
 library(ggridges)
 library(arrow)
-library(airtabler)
-library(janitor)
 library(scales)
-source("scripts/airtable_functions.R")
-
-
-
-# Load data from Airtable -------------------------------------------------
-
-
-
-APP <- "app7KsgYl2jhOnYg7"
-
-# Get the necessary tables
-tables <- airtable(APP, c("animals", "samples", "results", "reactions"))
-
-results <- tables$results$select_all(
-  filterByFormula = get_formula(
-    "sample_type", c("'MNPRO oral swab'", "'NADC oral swab'")
-  )
-) %>%
-  mutate(across(everything(), as.character))
-
-animals <- tables$animals$select_all() %>%
-  rename(animal = animal_id) %>%
-  mutate(across(everything(), as.character))
-
-
-
-
-
-# Themes ------------------------------------------------------------------
-
+library(jsonlite)
 
 
 main_theme <- theme(
@@ -50,31 +17,26 @@ main_theme <- theme(
 )
 
 
-
 # Load the data -----------------------------------------------------------
 
 
-
-df_ <- results %>%
-  left_join(animals, by="animal") %>%
-  filter(animal != "NULL") %>%
-  clean_names() %>%
+df_ <- read_parquet("data/data_dump.parquet") %>%
+  filter(str_detect(tolower(sample_type), "oral")) %>%
+  select(-data) %>%
   mutate(
-    across(c(mpr, ms, ttt, raf, auc, mpi), as.numeric),
-    assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC"))
+    across(c("sample_id", "animal_id", "assay"), ~as.factor(as.character(.))),
+    calcs = map(calcs, fromJSON),
+    assay = factor(assay, level=c("RT-QuIC", "Nano-QuIC")),
+    mpi = as.integer(mpi)
   ) %>%
-  mutate_at(
-    c("sample_id", "animal", "assay"),
-    ~as.factor(as.character(.))
-  ) %>%
-  mutate_at("mpi", as.integer)
+  unnest(calcs)
 
 df_sum <- df_ %>%
-  group_by(sample_id, animal, mpi, dilution, assay) %>%
   summarize(
     median_raf = median(raf),
     mean_raf = mean(raf),
-    mean_mpr = mean(mpr)
+    mean_mpr = mean(mpr),
+    .by = c(sample_id, animal_id, mpi, dilution, assay)
   )
 
 
@@ -83,34 +45,36 @@ df_sum <- df_ %>%
 
 
 
-df_ %>%
-  ggplot(aes(animal, raf, fill = assay)) +
-  geom_line(aes(y=median_raf, color=assay, group=assay), data=df_sum, linewidth=0.6) +
-  geom_boxplot(outliers = FALSE, linewidth=0.25) +
-  facet_grid(cols=vars(mpi), space = "free") +
-  scale_y_log10() +
-  scale_color_manual(values=c("darkslateblue", "darkorange")) +
-  scale_fill_manual(values=c("darkslateblue", "darkorange")) +
-  coord_flip() +
-  labs(
-    y="Rate of Amyloid Formation (1/s)"
-  ) +
-  main_theme +
-  theme(
-    axis.title.y = element_blank(),
-    axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
-    legend.position = "top",
-    legend.title = element_blank(),
-    legend.background = element_blank()
-  )
-ggsave("RAFs.png", path="figures/oral-swabs", width=16, height=8)
+# df_ %>%
+#   ggplot(aes(animal_id, raf, fill = assay)) +
+#   geom_line(aes(y=median_raf, color=assay, group=assay), data=df_sum, linewidth=0.6) +
+#   geom_boxplot(outliers = FALSE, linewidth=0.25) +
+#   facet_grid(cols=vars(mpi), space = "free") +
+#   scale_y_log10() +
+#   scale_color_manual(values=c("darkslateblue", "darkorange")) +
+#   scale_fill_manual(values=c("darkslateblue", "darkorange")) +
+#   coord_flip() +
+#   labs(
+#     y="Rate of Amyloid Formation (1/s)"
+#   ) +
+#   main_theme +
+#   theme(
+#     axis.title.y = element_blank(),
+#     axis.text.y = element_blank(),
+#     axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
+#     legend.position = "top",
+#     legend.title = element_blank(),
+#     legend.background = element_blank()
+#   )
+# ggsave("RAFs.png", path="figures/oral-swabs", width=16, height=8)
 
 
 
 df_sum %>%
+  mutate(animal_id = as.factor(as.numeric(animal_id))) %>%
   ggplot(aes(mpi, mean_raf, color=assay)) +
   geom_line(linewidth=1, alpha=0.7) +
-  facet_wrap(vars(animal), nrow=6) +
+  facet_wrap(vars(animal_id), nrow=6) +
   scale_color_manual(values=c("darkorange", "darkcyan")) +
   labs(
     y="Mean RAF",
@@ -131,17 +95,11 @@ ggsave("rafs_sample_facet.png", path="figures/oral-swabs", width=8, height=10)
 
 
 df_sum %>%
-  group_by(mpi, assay) %>%
-  summarize(mean_raf = mean(mean_raf)) %>%
-  ggplot(aes(
-    mpi, 
-    mean_raf, 
-    color = assay,
-    fill = assay
-  )) +
+  summarize(mean_raf = mean(mean_raf), .by = c(mpi, assay)) %>%
+  ggplot(aes(mpi, mean_raf, color = assay, fill = assay)) +
   geom_area(position="dodge", alpha=0.2) +
-  scale_x_continuous(breaks=seq(0, 60, 3)) +
-  coord_transform(ylim=c(min(df_sum$mean_raf), 0.03), expand=FALSE) +
+  # scale_x_continuous(breaks=seq(0, 60, 3)) +
+  coord_transform(ylim=c(min(df_sum$mean_raf), NA), expand=FALSE) +
   labs(
     y="Rate of Amyloid Formation (1/s)",
     title="Mean RAFs of RT-QuIC vs. Nano-QuIC"
