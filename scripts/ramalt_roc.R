@@ -1,7 +1,5 @@
 library(tidyverse)
-library(airtabler)
 library(pROC)
-library(janitor)
 
 main_theme <- theme(
   plot.title = element_text(size=24, hjust=0.5),
@@ -15,57 +13,35 @@ main_theme <- theme(
 
 
 # Load the data -----------------------------------------------------------
-APP <- "app7KsgYl2jhOnYg7"
-
-# Get the necessary tables
-tables <- airtable(APP, c("animals", "results"))
-
-results <- tables$results$select_all(
-  filterByFormula = "{sample_type} = 'RAMALT'"
-)
-
-animals <- tables$animals$select_all()
-animals <- animals %>%
-  rename("animal" = "animal_id")
 
 
-
-# Format the data ---------------------------------------------------------
-df_ <- results %>%
-  mutate(across(everything(), as.character)) %>%
-  left_join(animals, by = "animal") %>%
-  clean_names() %>%
+df_ <- read_parquet("data/data_dump.parquet") %>%
+  filter(sample_type == "RAMALT" & (mpi == 0 | mortem == "post-mortem")) %>%
+  select(-data) %>%
   mutate(
-    across(c(sample_id, animal), as.factor),
+    calcs = map(calcs, fromJSON),
+    across(where(is.character), as.factor),
     assay = factor(assay, levels = c("RT-QuIC", "Nano-QuIC")),
     mpi   = as.integer(mpi),
-    across(c(mpr, raf, ttt, ms, auc), as.numeric)
-  )
-
-# ROC dataset
-# 0 MPI animals = confirmed negative, post-mortem = confirmed positive
-# Excludes ante-mortem animals whose status is unknown
-df_roc <- df_ %>%
-  filter(mpi == 0 | mortem == "post-mortem") %>%
-  mutate(
     positive = as.integer(mortem == "post-mortem")
   ) %>%
-  pivot_longer(cols=c("mpr", "ms", "auc"))
+  unnest(calcs) %>%
+  pivot_longer(c(mpr, ms, auc))
 
 
 
 # Prepare for ROC ---------------------------------------------------------
 # Build all combinations of variables
 combos <- expand.grid(
-  m = unique(df_roc$name),
-  a = unique(df_roc$assay),
-  d = unique(df_roc$dilution),
+  m = unique(df_$name),
+  a = unique(df_$assay),
+  d = unique(df_$dilution),
   stringsAsFactors = FALSE
 )
 
 # Function to compute ROC + coords
 compute_roc <- function(m, a, d) {
-  sub_df <- df_roc %>%
+  sub_df <- df_ %>%
     filter(name == m, assay == a, dilution == d)
   
   sub_roc <- roc(sub_df, response = "positive", predictor = "value")
