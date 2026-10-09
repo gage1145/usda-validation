@@ -98,6 +98,8 @@ Before starting new work, pull the latest `main` so your branch starts from the 
 ```bash
 git checkout main
 git pull origin main
+git config user.name "Your Name"
+git config user.email "youremail@example.com"
 ```
 
 ### 2. Create a new branch for your work
