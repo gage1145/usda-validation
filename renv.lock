@@ -5506,10 +5506,10 @@
       "Maintainer": "Gage Rowden <gage.rowden1145@gmail.com>",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteRepo": "quicR",
       "RemoteUsername": "gage1145",
-      "RemoteRef": "objectify",
-      "RemoteSha": "ed46786e3053c85efabe3fb099fed9a831780e58"
+      "RemoteRepo": "quicR",
+      "RemoteRef": "v4.0.0",
+      "RemoteSha": "12982e7078c25219f70341878edb7e49d08d3652"
     },
     "ragg": {
       "Package": "ragg",

@@ -23,11 +23,11 @@ This project is aimed at validating RT-QuIC and Nano-QuIC for post- and ante-mor
 ## Prerequisites
 Before running anything, make sure the following are installed on your machine:
 
-1. **R** (>= 4.2) — [download here](https://cran.r-project.org/).
+1. **R** (4.6.1) — [download here](https://cran.r-project.org/).
 2. An R IDE — either:
     - **Positron** — *Recommended* [download here](https://positron.posit.co/download.html), or -
     - **RStudio** — [download here](https://posit.co/download/rstudio-desktop/)
-3. **Python** (>= 3.10) — [download here](https://www.python.org/downloads/). 
+3. **Python** (3.13.13) — [download here](https://www.python.org/downloads/). 
     - On Windows, check "Add Python to PATH" during install.
 4. **Git** — [download here](https://git-scm.com/downloads).
 5. An **Airtable API key** with read/write access to the project base (`app7KsgYl2jhOnYg7`). Ask the MNPRO Airtable maintainer if you don't have one.
@@ -46,7 +46,7 @@ This project uses **two** virtual environments — one for R (`renv`) and one fo
 > **Imporant: Never EVER commit .Renviron or .env to version control!** These contain sensitive keys that would give unwanted users access to our data.
 
 ### R environment (`renv`)
-This project uses `renv` to lock R package versions. Always work inside the `renv` environment so everyone gets the same results. It depends on the development version 3.0.4 of [quicR](https://github.com/gage1145/quicR/releases/tag/v3.0.4); `renv` should pull the right version automatically.
+This project uses `renv` to lock R package versions. Always work inside the `renv` environment so everyone gets the same results. It depends on the development version 4.0.0 of [quicR](https://github.com/gage1145/quicR/releases/tag/v4.0.0); `renv` should pull the right version automatically.
 
 1. Open the project:
    - **RStudio:** open `usda-validation.Rproj`.
@@ -65,8 +65,6 @@ This project uses `renv` to lock R package versions. Always work inside the `ren
    # quicR, airtabler, and vip sometimes fail to install through restore.
    # If you see errors about them, install manually:
    renv::install("gage1145/quicR")
-   renv::install("bergant/airtabler")
-   renv::install("bgreenwell/vip")
    ```
 
 ### Python environment (`venv`)
@@ -81,7 +79,7 @@ pip install -r requirements.txt
 
 **macOS / Linux:**
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -252,13 +250,58 @@ source("scripts/oral-swab_figures.R")
 
 Figures are written to `figures/`.
 
+#### Pulling data from Airtable using Python (Recommended)
+
+The best way to get data to analyze from airtable is using the data dump python script.
+
+```bash
+python airtable/data_dump.py --update-airtable
+```
+
+The data dump can be found at `data/data_dump.parquet`.
+
+>If you are authorized to do so, you can unblind the data by adding `--unblinded`.
+
+#### Pulling data from Airtable using R (Not recommended)
+
+> **Important**: This can be time consuming. It is recommended that you just use the data dump.
+
+> **If you want to query Airtable using R, you will need to install the `airtabler` package.**
+
+```R
+renv::install("bergant/airtabler")
+library(airtabler)
+
+# Base ID for this project.
+APP <- "app7KsgYl2jhOnYg7"
+
+# Helper for building Airtable filterByFormula strings.
+get_formula <- function(id, values, operator = "OR") {
+  make_string <- function(value) sprintf("%s({%s} = %s", operator, id, value)
+  sapply(values, make_string) |>
+    paste(collapse = ",") |>
+    paste0(strrep(")", length(values)), collapse = "")
+}
+
+# Pull the animals and results tables, filtering results to oral-swab samples.
+tables  <- airtable(APP, c("animals", "results"))
+animals <- tables$animals$select_all()
+results <- tables$results$select_all(
+  filterByFormula = get_formula(
+    "sample_type", c("'MNPRO oral swab'", "'NADC oral swab'")
+  )
+)
+```
+
 ---
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| `renv::restore()` fails on quicR, airtabler, or vip | Run `renv::install("gage1145/quicR")` and `renv::install("bgreenwell/vip")` manually.|
+| `renv::restore()` fails on quicR | Run `renv::install("gage1145/quicR@v4.0.0", lock=TRUE)` manually.|
 | Python can't find the Airtable key | Make sure `.env` lives in the project root and contains `KEY=...`. |
 | `python` command not found (Windows) | Reinstall Python and tick "Add Python to PATH". |
+| `python` command not found (MacOS) | You may need to use `python3` instead of `python` before the virtual environment is activated. |
+| `pip install -r requirements.txt` fails | Make sure you have the correct version of Python installed, listed in `requirements.txt`. |
 | `.venv\Scripts\activate` blocked on Windows | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` in PowerShell, then retry. |
