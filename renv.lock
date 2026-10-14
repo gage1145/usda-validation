@@ -375,26 +375,6 @@
       "Maintainer": "Winston Chang <winston@posit.co>",
       "Repository": "CRAN"
     },
-    "RANN": {
-      "Package": "RANN",
-      "Version": "2.6.3",
-      "Source": "Repository",
-      "Title": "Fast Nearest Neighbour Search (Wraps ANN Library) Using L2 Metric",
-      "Authors@R": "c( person(\"Gregory\",\"Jefferis\", email=\"jefferis@gmail.com\",  role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-0587-9355\")), person(given = c(\"Samuel\", \"E.\"), family = \"Kemp\", role = \"aut\"), person(given = \"Kirill\", family = \"M\\u00fcller\", role = \"ctb\", comment = c(ORCID = \"0000-0002-1416-3412\")), person(\"Sunil\",\"Arya\", role=c(\"aut\", \"cph\"), comment = c(ORCID = \"0000-0003-0939-4192\")), person(\"David\",\"Mount\", role=c(\"aut\", \"cph\"),  comment = c(ORCID = \"0000-0002-3290-8932\")), person(\"University of Maryland\", role=\"cph\", comment = \"ANN library is copyright University of Maryland and Sunil Arya and David Mount. See file COPYRIGHT for details\") )",
-      "Description": "Finds the k nearest neighbours for every point in a given dataset in O(N log N) time using Arya and Mount's ANN library (v1.1.3). There is support for approximate as well as exact searches, fixed radius searches and 'bd' as well as 'kd' trees. The distance is computed using the L2 (Euclidean) metric. Please see package 'RANN.L1' for the same functionality using the L1 (Manhattan, taxicab) metric.",
-      "License": "GPL (>= 3)",
-      "URL": "https://github.com/jefferislab/RANN, https://jefferislab.github.io/RANN/",
-      "BugReports": "https://github.com/jefferislab/RANN/issues",
-      "Suggests": [
-        "testthat"
-      ],
-      "Encoding": "UTF-8",
-      "Config/roxygen2/version": "8.1.0",
-      "NeedsCompilation": "yes",
-      "Author": "Gregory Jefferis [aut, cre] (ORCID: <https://orcid.org/0000-0002-0587-9355>), Samuel E. Kemp [aut], Kirill Müller [ctb] (ORCID: <https://orcid.org/0000-0002-1416-3412>), Sunil Arya [aut, cph] (ORCID: <https://orcid.org/0000-0003-0939-4192>), David Mount [aut, cph] (ORCID: <https://orcid.org/0000-0002-3290-8932>), University of Maryland [cph] (ANN library is copyright University of Maryland and Sunil Arya and David Mount. See file COPYRIGHT for details)",
-      "Maintainer": "Gregory Jefferis <jefferis@gmail.com>",
-      "Repository": "CRAN"
-    },
     "RColorBrewer": {
       "Package": "RColorBrewer",
       "Version": "1.1-3",
@@ -411,27 +391,6 @@
       "License": "Apache License 2.0",
       "NeedsCompilation": "no",
       "Repository": "CRAN"
-    },
-    "ROSE": {
-      "Package": "ROSE",
-      "Version": "0.0-4",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "Random Over-Sampling Examples",
-      "Date": "2021-06-14",
-      "Author": "Nicola Lunardon, Giovanna Menardi, Nicola Torelli",
-      "Maintainer": "Nicola Lunardon <nicola.lunardon@unimib.it>",
-      "Suggests": [
-        "MASS",
-        "nnet",
-        "rpart",
-        "tree"
-      ],
-      "Description": "Functions to deal with binary classification problems in the presence of imbalanced classes. Synthetic balanced samples are   generated according to ROSE (Menardi and Torelli, 2013).   Functions that implement more traditional remedies to the class imbalance are also provided, as well as different metrics to evaluate a learner accuracy. These are estimated by holdout, bootstrap or cross-validation methods.",
-      "License": "GPL-2",
-      "NeedsCompilation": "no",
-      "Repository": "CRAN",
-      "Encoding": "UTF-8"
     },
     "Rcpp": {
       "Package": "Rcpp",
@@ -2061,38 +2020,6 @@
       "NeedsCompilation": "no",
       "Author": "Ulrich Halekoh [aut, cph], Søren Højsgaard [aut, cre, cph]",
       "Maintainer": "Søren Højsgaard <sorenh@math.aau.dk>",
-      "Repository": "CRAN"
-    },
-    "doParallel": {
-      "Package": "doParallel",
-      "Version": "1.0.17",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "Foreach Parallel Adaptor for the 'parallel' Package",
-      "Authors@R": "c(person(\"Folashade\", \"Daniel\", role=\"cre\", email=\"fdaniel@microsoft.com\"), person(\"Microsoft\", \"Corporation\", role=c(\"aut\", \"cph\")), person(\"Steve\", \"Weston\", role=\"aut\"), person(\"Dan\", \"Tenenbaum\", role=\"ctb\"))",
-      "Description": "Provides a parallel backend for the %dopar% function using the parallel package.",
-      "Depends": [
-        "R (>= 2.14.0)",
-        "foreach (>= 1.2.0)",
-        "iterators (>= 1.0.0)",
-        "parallel",
-        "utils"
-      ],
-      "Suggests": [
-        "caret",
-        "mlbench",
-        "rpart",
-        "RUnit"
-      ],
-      "Enhances": [
-        "compiler"
-      ],
-      "License": "GPL-2",
-      "URL": "https://github.com/RevolutionAnalytics/doparallel",
-      "BugReports": "https://github.com/RevolutionAnalytics/doparallel/issues",
-      "NeedsCompilation": "no",
-      "Author": "Folashade Daniel [cre], Microsoft Corporation [aut, cph], Steve Weston [aut], Dan Tenenbaum [ctb]",
-      "Maintainer": "Folashade Daniel <fdaniel@microsoft.com>",
       "Repository": "CRAN"
     },
     "dplyr": {
@@ -3961,30 +3888,6 @@
       "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>), Duncan Temple Lang [ctb], Lloyd Hilaiel [cph] (author of bundled libyajl)",
       "Repository": "RSPM"
     },
-    "kernlab": {
-      "Package": "kernlab",
-      "Version": "0.9-33",
-      "Source": "Repository",
-      "Title": "Kernel-Based Machine Learning Lab",
-      "Authors@R": "c(person(\"Alexandros\", \"Karatzoglou\", role = c(\"aut\", \"cre\"), email = \"alexandros.karatzoglou@gmail.com\"), person(\"Alex\", \"Smola\", role = \"aut\"), person(\"Kurt\", \"Hornik\", role = \"aut\", email = \"Kurt.Hornik@R-project.org\", comment = c(ORCID = \"0000-0003-4198-9911\")), person(\"National ICT Australia (NICTA)\", role = \"cph\"), person(c(\"Michael\", \"A.\"), \"Maniscalco\", role = c(\"ctb\", \"cph\")), person(c(\"Choon\", \"Hui\"), \"Teo\", role = \"ctb\"))",
-      "Description": "Kernel-based machine learning methods for classification, regression, clustering, novelty detection, quantile regression and dimensionality reduction.  Among other methods 'kernlab' includes Support Vector Machines, Spectral Clustering, Kernel PCA, Gaussian Processes and a QP solver.",
-      "Depends": [
-        "R (>= 2.10)"
-      ],
-      "Imports": [
-        "methods",
-        "stats",
-        "grDevices",
-        "graphics"
-      ],
-      "LazyLoad": "Yes",
-      "License": "GPL-2",
-      "NeedsCompilation": "yes",
-      "Author": "Alexandros Karatzoglou [aut, cre], Alex Smola [aut], Kurt Hornik [aut] (<https://orcid.org/0000-0003-4198-9911>), National ICT Australia (NICTA) [cph], Michael A. Maniscalco [ctb, cph], Choon Hui Teo [ctb]",
-      "Maintainer": "Alexandros Karatzoglou <alexandros.karatzoglou@gmail.com>",
-      "Repository": "CRAN",
-      "Encoding": "UTF-8"
-    },
     "knitr": {
       "Package": "knitr",
       "Version": "1.52",
@@ -5747,15 +5650,14 @@
       ],
       "Config/testthat/edition": "3",
       "Config/roxygen2/version": "8.1.0",
+      "Author": "Gage Rowden [aut, cre] (ORCID: <https://orcid.org/0000-0002-7517-0480>)",
+      "Maintainer": "Gage Rowden <gage.rowden1145@gmail.com>",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteRepo": "quicR",
       "RemoteUsername": "gage1145",
-      "RemoteRef": "objectify",
-      "RemoteSha": "ed46786e3053c85efabe3fb099fed9a831780e58",
-      "NeedsCompilation": "no",
-      "Author": "Gage Rowden [aut, cre] (ORCID: <https://orcid.org/0000-0002-7517-0480>)",
-      "Maintainer": "Gage Rowden <gage.rowden1145@gmail.com>"
+      "RemoteRepo": "quicR",
+      "RemoteRef": "v4.0.0",
+      "RemoteSha": "12982e7078c25219f70341878edb7e49d08d3652"
     },
     "ragg": {
       "Package": "ragg",
@@ -5792,40 +5694,6 @@
       "SystemRequirements": "freetype2, libpng, libtiff, libjpeg, libwebp, libwebpmux",
       "NeedsCompilation": "yes",
       "Author": "Thomas Lin Pedersen [cre, aut] (ORCID: <https://orcid.org/0000-0002-5147-4711>), Maxim Shemanarev [aut, cph] (Author of AGG), Tony Juricic [ctb, cph] (Contributor to AGG), Milan Marusinec [ctb, cph] (Contributor to AGG), Spencer Garrett [ctb] (Contributor to AGG), Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
-      "Repository": "CRAN"
-    },
-    "ranger": {
-      "Package": "ranger",
-      "Version": "0.18.0",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "A Fast Implementation of Random Forests",
-      "Date": "2026-01-15",
-      "Authors@R": "c( person(\"Marvin N.\", \"Wright\", email = \"cran@wrig.de\", role = c(\"aut\", \"cre\")), person(\"Stefan\", \"Wager\", role = \"ctb\"), person(\"Philipp\", \"Probst\", role = \"ctb\"))",
-      "Description": "A fast implementation of Random Forests, particularly suited for high dimensional data. Ensembles of classification, regression, survival and probability prediction trees are supported. Data from genome-wide association studies can be analyzed efficiently. In addition to data frames, datasets of class 'gwaa.data' (R package 'GenABEL') and 'dgCMatrix' (R package 'Matrix')  can be directly analyzed.",
-      "License": "GPL-3",
-      "Imports": [
-        "Rcpp (>= 0.11.2)",
-        "Matrix"
-      ],
-      "LinkingTo": [
-        "Rcpp",
-        "RcppEigen"
-      ],
-      "Depends": [
-        "R (>= 3.1)"
-      ],
-      "Suggests": [
-        "survival",
-        "testthat"
-      ],
-      "Encoding": "UTF-8",
-      "RoxygenNote": "7.3.3",
-      "URL": "https://imbs-hl.github.io/ranger/, https://github.com/imbs-hl/ranger",
-      "BugReports": "https://github.com/imbs-hl/ranger/issues",
-      "NeedsCompilation": "yes",
-      "Author": "Marvin N. Wright [aut, cre], Stefan Wager [ctb], Philipp Probst [ctb]",
-      "Maintainer": "Marvin N. Wright <cran@wrig.de>",
       "Repository": "CRAN"
     },
     "rappdirs": {
@@ -7207,56 +7075,6 @@
       "Maintainer": "Thomas Lin Pedersen <thomas.pedersen@posit.co>",
       "Repository": "CRAN"
     },
-    "themis": {
-      "Package": "themis",
-      "Version": "1.1.0",
-      "Source": "Repository",
-      "Title": "Extra Recipes Steps for Dealing with Unbalanced Data",
-      "Authors@R": "c( person(\"Emil\", \"Hvitfeldt\", , \"emil.hvitfeldt@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-0679-1945\")), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"), comment = c(ROR = \"03wc8by49\")) )",
-      "Description": "A dataset with an uneven number of cases in each class is said to be unbalanced. Many models produce a subpar performance on unbalanced datasets. A dataset can be balanced by increasing the number of minority cases using SMOTE 2011 <doi:10.48550/arXiv.1106.1813>, BorderlineSMOTE 2005 <doi:10.1007/11538059_91> and ADASYN 2008. Or by decreasing the number of majority cases using NearMiss 2003 <https://www.site.uottawa.ca/~nat/Workshop2003/jzhang.pdf> or Tomek link removal 1976.",
-      "License": "MIT + file LICENSE",
-      "URL": "https://github.com/tidymodels/themis, https://themis.tidymodels.org",
-      "BugReports": "https://github.com/tidymodels/themis/issues",
-      "Depends": [
-        "R (>= 4.1)",
-        "recipes (>= 1.1.0)"
-      ],
-      "Imports": [
-        "cli",
-        "dplyr",
-        "generics (>= 0.1.0)",
-        "glue",
-        "gower",
-        "hardhat",
-        "lifecycle (>= 1.0.3)",
-        "purrr",
-        "RANN",
-        "rlang (>= 1.1.0)",
-        "ROSE",
-        "tibble",
-        "vctrs",
-        "withr"
-      ],
-      "Suggests": [
-        "covr",
-        "dials (>= 1.2.0)",
-        "ggplot2",
-        "kernlab",
-        "modeldata",
-        "philentropy",
-        "testthat (>= 3.0.0)"
-      ],
-      "Config/Needs/website": "tidyverse/tidytemplate",
-      "Config/testthat/edition": "3",
-      "Config/usethis/last-upkeep": "2025-04-24",
-      "Encoding": "UTF-8",
-      "LazyData": "true",
-      "Config/roxygen2/version": "8.0.0",
-      "NeedsCompilation": "no",
-      "Author": "Emil Hvitfeldt [aut, cre] (ORCID: <https://orcid.org/0000-0002-0679-1945>), Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
-      "Maintainer": "Emil Hvitfeldt <emil.hvitfeldt@posit.co>",
-      "Repository": "CRAN"
-    },
     "tibble": {
       "Package": "tibble",
       "Version": "3.3.1",
@@ -7591,45 +7409,6 @@
       "Maintainer": "Vitalie Spinu <spinuvit@gmail.com>",
       "Repository": "RSPM"
     },
-    "tinyplot": {
-      "Package": "tinyplot",
-      "Version": "0.7.0",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "Lightweight Extension of the Base R Graphics System",
-      "Date": "2026-07-02",
-      "Authors@R": "c( person( given = \"Grant\", family = \"McDermott\", role = c(\"aut\", \"cre\"), email = \"contact@grantmcdermott.com\", comment = c(ORCID = \"0000-0001-7883-8573\") ), person( given = \"Vincent\", family = \"Arel-Bundock\", role = \"aut\", email = \"vincent.arel-bundock@umontreal.ca\", comment = c(ORCID = \"0000-0003-1995-6531\") ), person( given = \"Achim\", family = \"Zeileis\", role = \"aut\", email = \"Achim.Zeileis@R-project.org\", comment = c(ORCID = \"0000-0003-0918-3766\") ), person( given = \"Etienne\", family = \"Bacher\", role = \"ctb\", email = \"etienne.bacher@protonmail.com\" ) )",
-      "Description": "Lightweight extension of the base R graphics system, with support for automatic legends, facets, themes, and various other enhancements.",
-      "License": "Apache License (>= 2)",
-      "Depends": [
-        "R (>= 4.0.0)"
-      ],
-      "Imports": [
-        "graphics",
-        "grDevices",
-        "stats",
-        "tools",
-        "utils"
-      ],
-      "Suggests": [
-        "fontquiver",
-        "png",
-        "rsvg",
-        "svglite (>= 2.2.0)",
-        "tinytest",
-        "tinysnapshot (>= 0.0.3)",
-        "knitr"
-      ],
-      "Config/Needs/website": "altdoc (>= 0.7.2), future.apply",
-      "Encoding": "UTF-8",
-      "URL": "https://grantmcdermott.com/tinyplot/",
-      "BugReports": "https://github.com/grantmcdermott/tinyplot/issues",
-      "Config/roxygen2/version": "8.0.0",
-      "NeedsCompilation": "no",
-      "Author": "Grant McDermott [aut, cre] (ORCID: <https://orcid.org/0000-0001-7883-8573>), Vincent Arel-Bundock [aut] (ORCID: <https://orcid.org/0000-0003-1995-6531>), Achim Zeileis [aut] (ORCID: <https://orcid.org/0000-0003-0918-3766>), Etienne Bacher [ctb]",
-      "Maintainer": "Grant McDermott <contact@grantmcdermott.com>",
-      "Repository": "CRAN"
-    },
     "tinytex": {
       "Package": "tinytex",
       "Version": "0.60",
@@ -7877,81 +7656,6 @@
       "Author": "Hadley Wickham [aut], Lionel Henry [aut], Davis Vaughan [aut, cre], data.table team [cph] (Radix sort based on data.table's forder() and their contribution to R's order()), Posit Software, PBC [cph, fnd]",
       "Maintainer": "Davis Vaughan <davis@posit.co>",
       "Repository": "CRAN"
-    },
-    "vip": {
-      "Package": "vip",
-      "Version": "0.5.0.9000",
-      "Source": "GitHub",
-      "Type": "Package",
-      "Title": "Variable Importance Plots",
-      "Authors@R": "c( person(c(\"Brandon\", \"M.\"), family = \"Greenwell\",  email = \"greenwell.brandon@gmail.com\", role = c(\"aut\", \"cre\"),  comment = c(ORCID = \"0000-0002-8120-0084\")), person(\"Brad\", \"Boehmke\", email = \"bradleyboehmke@gmail.com\", role = c(\"aut\"), comment = c(ORCID = \"0000-0002-3611-8516\")) )",
-      "Description": "A general framework for constructing variable importance plots from  various types of machine learning models in R. Aside from some standard model- specific variable importance measures, this package also provides model- agnostic approaches that can be applied to any supervised learning algorithm. These include 1) an efficient permutation-based variable importance measure,  2) variable importance based on Shapley values (Strumbelj and Kononenko,  2014) <doi:10.1007/s10115-013-0679-x>, and 3) the variance-based  approach described in Greenwell et al. (2018) <doi:10.48550/arXiv.1805.04755>. A  variance-based method for quantifying the relative strength of interaction  effects is also included (see the previous reference for details).",
-      "License": "GPL (>= 2)",
-      "URL": "https://github.com/bgreenwell/vip, https://bgreenwell.github.io/vip/, https://bgreenwell.r-universe.dev/vip",
-      "BugReports": "https://github.com/bgreenwell/vip/issues",
-      "Encoding": "UTF-8",
-      "VignetteBuilder": "knitr",
-      "Depends": [
-        "R (>= 4.1.0)"
-      ],
-      "Imports": [
-        "stats",
-        "tinyplot (>= 0.3.0)",
-        "utils"
-      ],
-      "Suggests": [
-        "covr",
-        "doParallel",
-        "fastshap (>= 0.1.0)",
-        "foreach",
-        "knitr",
-        "mlbench",
-        "modeldata",
-        "NeuralNetTools",
-        "pdp",
-        "rmarkdown",
-        "rpart",
-        "tinytest (>= 1.4.3)",
-        "varImp",
-        "yardstick"
-      ],
-      "Enhances": [
-        "C50",
-        "caret",
-        "Cubist",
-        "earth",
-        "gbm",
-        "glmnet",
-        "h2o",
-        "lightgbm",
-        "mixOmics",
-        "mlr",
-        "mlr3",
-        "neuralnet",
-        "nnet",
-        "parsnip (>= 0.1.7)",
-        "party",
-        "partykit",
-        "pls",
-        "randomForest",
-        "ranger",
-        "RSNNS",
-        "sparklyr (>= 0.8.0)",
-        "tidymodels",
-        "workflows (>= 0.2.3)",
-        "xgboost (>= 3.2.0)"
-      ],
-      "Additional_repositories": "https://bgreenwell.r-universe.dev",
-      "RoxygenNote": "7.3.3",
-      "Roxygen": "list(markdown = TRUE)",
-      "Author": "Brandon M. Greenwell [aut, cre] (ORCID: <https://orcid.org/0000-0002-8120-0084>), Brad Boehmke [aut] (ORCID: <https://orcid.org/0000-0002-3611-8516>)",
-      "Maintainer": "Brandon M. Greenwell <greenwell.brandon@gmail.com>",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteUsername": "bgreenwell",
-      "RemoteRepo": "vip",
-      "RemoteRef": "devel",
-      "RemoteSha": "6cd2847d4fbccc073945ddcb20adba08137b7d35"
     },
     "viridisLite": {
       "Package": "viridisLite",
